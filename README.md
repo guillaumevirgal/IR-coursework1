@@ -1,1 +1,1 @@
-# IR-coursework1
+See the wiki for a basic tutorial
