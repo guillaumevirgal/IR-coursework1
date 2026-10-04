@@ -59,9 +59,15 @@ class ArmController:
         self.wait_until_settled(targets)
         return self.get_tcp_position()
 
-    def read_joints(self):
-        """Return the current sensor reading for each joint, keyed by joint name."""
-        return {name: sensor.getValue() for name, sensor in self.sensors.items()}
+    def read_joints(self, precision=None):
+        """
+        Return the current sensor reading for each joint, keyed by joint name.
+        Optionally rounded to n decimal places.
+        """
+        return {
+            name: round(sensor.getValue(), precision) if precision is not None else sensor.getValue()
+            for name, sensor in self.sensors.items()
+        }
 
     def wait_until_settled(self, targets):
         """Block until every joint stays within tolerance for settle_time seconds."""
@@ -167,3 +173,7 @@ class ArmController:
             for name, error in errors.items()
             if not error <= self.joints[name].tolerance
         }
+
+# ---- Utility functions ----
+def round_pose(pose, precision=4):
+    return [round(angle, precision) for angle in pose]
