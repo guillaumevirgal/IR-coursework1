@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from scripts.forward_kinematics_ned import forward_kinematics_ned
 
 TOLERANCE = 1e-3
-CSV_FILE = False #"robot_data_1e-3.csv" # set to false to not log
+CSV_FILE = False #"robot_data_double_1e-3.csv" # set to false to not log
 
 # Fill with your own poses, or leave empty to generate random poses.
 POSES = [
@@ -39,7 +39,7 @@ JOINTS = {
 JOINT_LIMITS = {
     "joint_1": (-2.8, 2.8),
     "joint_2": (-0.8, 0.8),
-    "joint_3": (0, 1.3), # limited to positive only from -1.5
+    "joint_3": (-1.5, 1.3), # limited to positive only from -1.5
 }
 
 def generate_random_pose():

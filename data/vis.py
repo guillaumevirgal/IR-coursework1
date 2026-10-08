@@ -8,7 +8,7 @@ ay_pos = []
 az_pos = []
 errors = []
 
-file_name = "robot_data_1e-3.csv"
+file_name = "robot_data_double_1e-3.csv"
 
 with open(file_name, "r", newline="") as file:
     reader = csv.DictReader(file)
@@ -28,9 +28,9 @@ scatter = ax.scatter(
     az_pos,
     c=errors,
     cmap="RdYlGn_r",
-    vmin=0,
-    vmax=0.3,
-    s=6
+    # vmin=0,
+    # vmax=0.3,
+    s=3
 )
 
 ax.set_xlabel("X (m)")
