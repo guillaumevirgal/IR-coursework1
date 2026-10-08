@@ -39,7 +39,7 @@ JOINTS = {
 JOINT_LIMITS = {
     "joint_1": (-2.8, 2.8),
     "joint_2": (-0.8, 0.8),
-    "joint_3": (-1.5, 1.3), # limited to positive only from -1.5
+    "joint_3": (0, 1.3), # limited to positive only from -1.5
 }
 
 def generate_random_pose():
