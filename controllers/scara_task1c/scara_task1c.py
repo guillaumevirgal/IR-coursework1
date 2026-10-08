@@ -13,21 +13,40 @@ from forward_kinematics_scara import forward_kinematics_scara
 
 
 JOINTS = {
-    "shoulder": Joint("base_arm_motor", speed=0.7, tolerance=0.001),
-    "elbow": Joint("arm_motor", speed=0.7, tolerance=0.001),
-    "rotation": Joint("shaft_rotation_motor", speed=1.0, tolerance=0.001),
-    "lift": Joint("shaft_linear_motor", speed=0.05, tolerance=0.0001),
+    "shoulder": Joint(
+        "base_arm_motor",
+        speed=0.7,
+        tolerance=0.001,
+    ),
+    "elbow": Joint(
+        "arm_motor",
+        speed=0.7,
+        tolerance=0.001,
+    ),
+    "rotation": Joint(
+        "shaft_rotation_motor",
+        speed=1.0,
+        tolerance=0.001,
+    ),
+    "lift": Joint(
+        "shaft_linear_motor",
+        speed=0.05,
+        tolerance=0.0001,
+    ),
 }
 
 
 # [q1, q2, shaft_rotation, q4]
 # q2 is positive to keep the SCARA in the required elbow-up configuration.
 POSES = [
-    [0.00, 0.20, 0.0, -0.10],
-    [0.30, 0.40, 0.0, -0.05],
-    [-0.30, 0.60, 0.0, -0.15],
-    [0.50, 0.70, 0.0, -0.20],
-    [-0.50, 0.30, 0.0, -0.08],
+    [0.0, 0.2, 0.0, -0.05],
+    [0.3, 0.4, 0.0, -0.08],
+    [-0.3, 0.5, 0.0, -0.10],
+    [0.5, 0.2, 0.0, -0.12],
+    [-0.5, 0.7, 0.0, -0.06],
+    [0.7, 0.3, 0.0, -0.10],
+    [-0.7, 0.8, 0.0, -0.04],
+    [0.2, 0.6, 0.0, -0.08],
 ]
 
 
@@ -45,26 +64,34 @@ def position_error(fk_position, webots_position):
 
 if __name__ == "__main__":
 
-    arm = ArmController(JOINTS, tcp_slot="handSlot")
+    arm = ArmController(
+        JOINTS,
+        tcp_slot="handSlot",
+    )
 
     total_errors = []
 
     for pose_number, pose in enumerate(POSES, start=1):
 
-        # Move the robot to the test pose and get Webots TCP.
+        # Move to the target pose.
+        # ArmController.move_to() already waits until the
+        # joints have settled before returning the TCP position.
         tcp = arm.move_to(pose)
 
+        # Webots ground-truth TCP position in the SCARA arm frame.
         webots_position = tcp["arm"]
 
-        # Only the three active SCARA joints are used by FK.
+        # Read the actual settled joint values.
         q1 = arm.sensors["shoulder"].getValue()
         q2 = arm.sensors["elbow"].getValue()
         q4 = arm.sensors["lift"].getValue()
 
-        # Calculate TCP using our FK.
-        fk_position = forward_kinematics_scara([q1, q2, q4])
+        # Calculate TCP position using our forward kinematics.
+        fk_position = forward_kinematics_scara(
+            [q1, q2, q4]
+        )
 
-        # Calculate the difference.
+        # Calculate the difference between FK and Webots.
         dx, dy, dz, error = position_error(
             fk_position,
             webots_position,
