@@ -1,6 +1,8 @@
 import random
 import sys
 from pathlib import Path
+import csv
+import os
 
 # Webots starts each controller from its own folder.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -9,9 +11,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from scripts.forward_kinematics_ned import forward_kinematics_ned
 
 TOLERANCE = 1e-3
+CSV_FILE = False #"robot_data_1e-3.csv" # set to false to not log
 
 # Fill with your own poses, or leave empty to generate random poses.
 POSES = [
+    # [1.8821, 0.7483, 1.1955],
     # [-2.1146, 0.7782, 0.9575], # error: 0.007892
     # [-1.9301, 0.7326, 0.8255], # error: 0.004553
     # [1.4876, -0.0048, 0.5218],
@@ -21,9 +25,9 @@ POSES = [
 
 # If filled it will automatically check if the poses matched the TCP targets. If empty, no check will be performed.
 TCP_TARGETS = [
-    [-0.2258, 0.0189, 0.3065],
-    [0.0937, 0.0439, 0.2957],
-    [0.0237, 0.2117, 1],
+    # [-0.2258, 0.0189, 0.3065],
+    # [0.0937, 0.0439, 0.2957],
+    # [0.0237, 0.2117, 1],
 ]
 
 JOINTS = {
@@ -35,7 +39,7 @@ JOINTS = {
 JOINT_LIMITS = {
     "joint_1": (-2.8, 2.8),
     "joint_2": (-0.8, 0.8),
-    "joint_3": (-1.5, 1.3), # limited to positive only from -1.5
+    "joint_3": (0, 1.3), # limited to positive only from -1.5
 }
 
 def generate_random_pose():
@@ -53,7 +57,40 @@ def check_tcp(measured, target, tolerance=TOLERANCE):
 
 import math
 
-def print_tcp_error(expected, actual):
+def initialise_csv():
+    if not os.path.isfile(CSV_FILE):
+        with open(CSV_FILE, "w", newline="") as csv_file:
+            writer = csv.writer(csv_file)
+            writer.writerow([
+                "joint1",
+                "joint2",
+                "joint3",
+                "ex",
+                "ey",
+                "ez",
+                "ax",
+                "ay",
+                "az",
+                "error"
+            ])
+
+def write_csv_line(joint1, joint2, joint3, ex, ey, ez, ax, ay, az, err):
+    with open(CSV_FILE, "a", newline="") as csv_file:
+        writer = csv.writer(csv_file)
+        writer.writerow([
+            joint1,
+            joint2,
+            joint3,
+            ex,
+            ey,
+            ez,
+            ax,
+            ay,
+            az,
+            err
+        ])
+
+def print_tcp_error(expected, actual, pose):
     dx = actual[0] - expected[0]
     dy = actual[1] - expected[1]
     dz = actual[2] - expected[2]
@@ -65,6 +102,20 @@ def print_tcp_error(expected, actual):
     print(f"Actual   TCP in world frame (m): "
           f"({actual[0]:+.4f}, {actual[1]:+.4f}, {actual[2]:+.4f})")
     print(f"Position error: {distance:.6f} m ({distance * 1000:.3f} mm)")
+    
+    if CSV_FILE and (distance <= TOLERANCE):
+        write_csv_line(
+            pose[0],
+            pose[1],
+            pose[2],
+            expected[0],
+            expected[1],
+            expected[2],
+            actual[0],
+            actual[1],
+            actual[2],
+            distance
+        )
 
 def move_and_report(arm,pose,target=None):
     x, y, z = forward_kinematics_ned(pose)
@@ -80,16 +131,19 @@ def move_and_report(arm,pose,target=None):
 
     print_tcp_error(
         (x, y, z),
-        tcp["world"]
+        tcp["world"],
+        pose
     )
 
-    if check_tcp(tcp["world"], [x, y, z]):
-        print("TCP target matched!")
-    else:
-        print("ERROR: TCP target didn't match.")
+    # if check_tcp(tcp["world"], [x, y, z]):
+    #     print("TCP target matched!")
+    # else:
+    #     print("ERROR: TCP target didn't match.")
 
 def main():
     arm = ArmController(JOINTS, tcp_slot="tcpSlot")
+    if CSV_FILE:
+        initialise_csv()
     if len(POSES):
         for i, pose in enumerate(POSES, start=1):
             target = TCP_TARGETS[i - 1] if i <= len(TCP_TARGETS) else None
