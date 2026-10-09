@@ -81,6 +81,25 @@ These limits avoid known floor contacts. It also rejects poses that fail to
 settle or exceed 1 mm FK/TCP error, preventing obstructed or inaccurate rows
 from entering the dataset. A fixed seed makes comparisons reproducible.
 
+### Dataset acceptance and rejection
+
+Only accepted rows count toward `--samples`. Rejected random poses are replaced
+by newly sampled poses until the requested number of rows has been saved.
+
+| Rule | Result | Justification |
+|---|---|---|
+| Ned `joint_3` or SCARA `arm_motor` would be negative | Never sampled | The positive range keeps the required elbow-up configuration and avoids two joint solutions for one TCP position. |
+| Ned FK gives `z < 0.14 m` | Resample before moving | Below this height the Ned wrist or gripper can contact the floor, making the measured position unreliable. |
+| SCARA FK gives `z < 0.02 m` | Resample before moving | Below this height the SCARA shaft can contact the floor before reaching the requested extension. |
+| Motors do not settle within 10 simulated seconds | Skip the pose | A blocked or unreachable movement does not provide a reliable joint/TCP pair. |
+| FK and Webots TCP differ by more than `0.001 m` | Skip the row | The 1 mm threshold prevents inaccurate FK/TCP pairs from entering the training data. |
+| All checks pass | Append the row | The joints, FK position, Webots position and error remain available for auditing and later processing. |
+
+The height checks prevent the known floor contacts; they are not a general
+self-collision detector. The generator also does not remove duplicate samples
+or normalise values. Normalisation remains separate so the raw evidence is
+preserved.
+
 ## Dataset visualisation
 
 `data/visualise_dataset.py` uses the shared geometry and CSV helpers in
