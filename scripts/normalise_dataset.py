@@ -1,57 +1,61 @@
-"""
-Task 2 - normalise Ned joint values to [-1, 1].
+"""Normalise raw Ned or SCARA Webots dataset joint values to [-1, 1]."""
 
-    q_norm = 2 * (q - q_min) / (q_max - q_min) - 1
-
-q_min / q_max are the ranges the joints were *sampled* from (not the min/max
-of the data), so the network output can be mapped back with denormalise().
-joint_3 is restricted to positive values (elbow-up only) as required by Task 2.
-
-Input : data/csv/<name>.csv  (joint1, joint2, joint3, ex, ey, ez, ax, ay, az, error)
-Output: data/csv/<name>_normalised.csv  (q1, q2, q3, x, y, z)
-        x, y, z are the FK positions (ex, ey, ez).
-
-Usage: python scripts/normalise_dataset.py [robot_data_1e-3.csv]
-"""
+import argparse
 import csv
-import sys
 from pathlib import Path
 
-CSV_DIR = Path(__file__).resolve().parents[1] / "data" / "csv"
 
-NED_RANGES = {
-    "joint1": (-2.8, 2.8),
-    "joint2": (-0.8, 0.8),
-    "joint3": (0.0, 1.3),  # positive only (elbow-up)
+ROOT = Path(__file__).resolve().parents[1]
+JOINT_LIMITS = {
+    "ned": ((-2.8, 2.8), (-0.8, 0.8), (0.0, 1.3)),
+    "scara": ((-0.73, 0.73), (0.0, 0.83), (-0.2, 0.0)),
 }
 
 
-def normalise(q, q_min, q_max):
-    return 2.0 * (q - q_min) / (q_max - q_min) - 1.0
+def normalise(value, lower, upper):
+    return 2.0 * (value - lower) / (upper - lower) - 1.0
 
 
-def denormalise(q_norm, q_min, q_max):
-    return (q_norm + 1.0) / 2.0 * (q_max - q_min) + q_min
+def parse_args():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("robot", choices=JOINT_LIMITS)
+    parser.add_argument("input", type=Path)
+    parser.add_argument("--tcp-source", choices=("actual", "expected"), default="actual")
+    parser.add_argument("--output", type=Path)
+    return parser.parse_args()
 
 
 def main():
-    name = sys.argv[1] if len(sys.argv) > 1 else "robot_data_1e-3_2.csv"
-    src = CSV_DIR / name
-    dst = src.with_name(src.stem + "_normalised.csv")
+    args = parse_args()
+    source = args.input if args.input.is_absolute() else ROOT / args.input
+    output = args.output or (
+        ROOT / "data" / "normalised"
+        / f"{args.robot}_{source.stem}_{args.tcp_source}_normalised.csv"
+    )
+    if not output.is_absolute():
+        output = ROOT / output
+    output.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(src, newline="") as f_in, open(dst, "w", newline="") as f_out:
-        reader = csv.DictReader(f_in)
-        writer = csv.writer(f_out)
-        writer.writerow(["q1", "q2", "q3", "x", "y", "z"])
-        n = 0
-        for row in reader:
-            q = [normalise(float(row[j]), *NED_RANGES[j]) for j in NED_RANGES]
-            if any(abs(v) > 1.0 for v in q):
-                raise ValueError(f"row {n + 2}: joint outside sampling range: {row}")
-            writer.writerow(q + [row["ex"], row["ey"], row["ez"]])
-            n += 1
+    prefix = "a" if args.tcp_source == "actual" else "e"
+    with source.open(newline="", encoding="utf-8") as input_file:
+        reader = csv.DictReader(input_file)
+        with output.open("w", newline="", encoding="utf-8") as output_file:
+            writer = csv.writer(output_file)
+            writer.writerow(("q1", "q2", "q3", "x", "y", "z"))
+            count = 0
+            for line_number, row in enumerate(reader, start=2):
+                joints = [float(row[f"joint{index}"]) for index in range(1, 4)]
+                values = [
+                    normalise(value, lower, upper)
+                    for value, (lower, upper) in zip(joints, JOINT_LIMITS[args.robot])
+                ]
+                if any(not -1.0 <= value <= 1.0 for value in values):
+                    raise ValueError(f"line {line_number}: joint outside {args.robot} range")
+                position = [float(row[f"{prefix}{axis}"]) for axis in "xyz"]
+                writer.writerow(values + position)
+                count += 1
 
-    print(f"Normalised {n} samples -> {dst}")
+    print(f"Normalised {count} rows from {source} to {output}")
 
 
 if __name__ == "__main__":

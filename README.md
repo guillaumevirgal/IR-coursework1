@@ -19,6 +19,7 @@ IR-coursework1/
 │   ├── forward_kinematics_ned.py    # Task 1.B Ned FK
 │   ├── forward_kinematics_scara.py  # Task 1.B SCARA FK
 │   ├── normalise_dataset.py         # Task 2 joint normalisation
+│   ├── run_dataset_generation.sh    # Headless physics-based generation
 │   ├── run_fk_precision.sh          # Runs Task 1.C for both robots
 │   └── plot_fk_precision.py         # Summarises Task 1.C results
 └── data/
@@ -32,7 +33,8 @@ IR-coursework1/
 
 ```mermaid
 flowchart LR
-    W[Webots worlds] --> M[controllers/main/main.py]
+    S[scripts/run_dataset_generation.sh] --> W[Webots worlds]
+    W --> M[controllers/main/main.py]
     M --> A[common/arm_controller.py]
     M --> G[common/dataset_generator.py]
     M --> FK[Ned and SCARA FK scripts]
@@ -61,6 +63,18 @@ Both robots use `controllers/main/main.py`; their world files pass either
 `ned` or `scara` as the first controller argument. Starting either world
 continuously generates random elbow-up samples under `data/csv/`.
 
+Each row is physics-derived: the controller commands the motors, waits for the
+arm to settle, reads the joint sensors and TCP from Webots, and compares that
+measurement with FK. Run the same process faster in headless Webots fast mode:
+
+```bash
+scripts/run_dataset_generation.sh ned 1000 42
+scripts/run_dataset_generation.sh scara 1000 42
+```
+
+The arguments are robot, accepted row count and random seed. A fourth argument
+can set the output CSV path. The script refuses to append to an existing file.
+
 This separation keeps sampling and CSV behaviour identical while leaving motor
 names, limits, FK and fixed joints in one small robot configuration. Elbow-up
 sampling makes the position-to-joint mapping single-valued for model training.
@@ -74,6 +88,15 @@ All generated files use the generic columns `joint1`, `joint2`, and `joint3` so
 both robots can train one network. For SCARA, `joint3` is the third active model
 output, `shaft_linear_motor` (physical q4). Values remain raw here so the FK and
 Webots measurements are auditable; normalisation is a separate processing step.
+
+Normalise the measured Webots TCP (`ax`, `ay`, `az`) for training with:
+
+```bash
+python3 scripts/normalise_dataset.py ned data/csv/ned_1000_seed42.csv
+python3 scripts/normalise_dataset.py scara data/csv/scara_1000_seed42.csv
+```
+
+Use `--tcp-source expected` only when FK coordinates are deliberately required.
 
 Before commanding Webots, the generator rejects poses whose FK endpoint is
 below the floor-clearance threshold: 0.14 m for Ned and 0.02 m for SCARA.
