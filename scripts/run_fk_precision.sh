@@ -13,9 +13,9 @@ run_world() {
     local tmp="$REPO/worlds/fk_precision_${robot}.wbt"
     trap 'rm -f "$tmp" "$REPO/worlds/.fk_precision_'"$robot"'.wbproj"' RETURN
 
-    # Copy the world, point the arm at fk_precision and silence the other robot's controller.
-    sed -e "s|controller \"tcp_pose\"|controller \"<none>\"|" \
-        -e "/controller \"scara_control\"/d" \
+    # Copy the world and replace its dataset controller with fk_precision.
+    sed -e '/  controller "main"/d' \
+        -e '/  controllerArgs \[/,+2d' \
         -e "s|^$arm_line|&\n  controller \"fk_precision\"\n  controllerArgs [\"$robot\" \"$SAMPLES\" \"$SEED\"]|" \
         "$REPO/worlds/$world" > "$tmp"
 

@@ -13,7 +13,7 @@ PROTO TeachingNed [
   field SFVec3f     translation     0 0 0       # Is `Pose.translation`.
   field SFRotation  rotation        0 0 1 0     # Is `Pose.rotation`.
   field SFString    name            "Ned"       # Is `Robot.name`.
-  field SFString    controller      "ned_keyboard"       # Is `Robot.controller`.
+  field SFString    controller      "<none>"             # Is `Robot.controller`.
   field MFString    controllerArgs  []          # Is `Robot.controllerArgs`.
   field SFString    window          "<generic>" # Is `Robot.window`.
   field SFString    customData      ""          # Is `Robot.customData`.
