@@ -19,7 +19,7 @@ IR-coursework1/
 │   ├── forward_kinematics_ned.py    # Task 1.B Ned FK
 │   ├── forward_kinematics_scara.py  # Task 1.B SCARA FK
 │   ├── normalise_dataset.py         # Task 2 joint normalisation
-│   ├── run_dataset_generation.sh    # Headless physics-based generation
+│   ├── run_dataset_generation.py    # Cross-platform headless generation
 │   ├── run_fk_precision.sh          # Runs Task 1.C for both robots
 │   └── plot_fk_precision.py         # Summarises Task 1.C results
 └── data/
@@ -33,7 +33,7 @@ IR-coursework1/
 
 ```mermaid
 flowchart LR
-    S[scripts/run_dataset_generation.sh] --> W[Webots worlds]
+    S[scripts/run_dataset_generation.py] --> W[Webots worlds]
     W --> M[controllers/main/main.py]
     M --> A[common/arm_controller.py]
     M --> G[common/dataset_generator.py]
@@ -68,12 +68,16 @@ arm to settle, reads the joint sensors and TCP from Webots, and compares that
 measurement with FK. Run the same process faster in headless Webots fast mode:
 
 ```bash
-scripts/run_dataset_generation.sh ned 1000 42
-scripts/run_dataset_generation.sh scara 1000 42
+python scripts/run_dataset_generation.py ned 1000 42
+python scripts/run_dataset_generation.py scara 1000 42
 ```
 
 The arguments are robot, accepted row count and random seed. A fourth argument
 can set the output CSV path. The script refuses to append to an existing file.
+It works on Windows, Linux and macOS by finding Webots from `PATH`,
+`WEBOTS_HOME` or the standard installation location. Use
+`--webots "C:\Program Files\Webots\msys64\mingw64\bin\webots.exe"` if automatic
+detection does not find a Windows installation.
 
 This separation keeps sampling and CSV behaviour identical while leaving motor
 names, limits, FK and fixed joints in one small robot configuration. Elbow-up
