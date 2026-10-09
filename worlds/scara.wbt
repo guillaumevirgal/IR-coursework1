@@ -19,7 +19,7 @@ Floor {
 }
 Robot {
   name "position"
-  controller "tcp_pose"
+  controller "<none>"
   supervisor TRUE
 }
 DEF ARM ScaraT6 {

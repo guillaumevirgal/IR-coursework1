@@ -1,5 +1,15 @@
 See the wiki for a basic tutorial.
 
+## Structure
+
+- `controllers/main`: shared Ned/SCARA dataset entry point.
+- `controllers/common`: reusable arm control and dataset generation.
+- `controllers/fk_precision`: Task 1.C FK validation for both robots.
+- `scripts/forward_kinematics_*`: Task 1.B FK implementations.
+- `scripts/normalise_dataset.py`: Task 2 joint normalisation.
+- `data/visualise_dataset.py`: shared dataset inspection.
+- `worlds` and `protos`: Webots environments and Ned model assets.
+
 ## Dataset generation
 
 The shared generation logic is in `controllers/common/dataset_generator.py`.
