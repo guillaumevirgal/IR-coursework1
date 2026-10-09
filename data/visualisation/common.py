@@ -4,52 +4,26 @@ import csv
 import math
 
 
-RAW_FIELDS = {
+CSV_FIELDS = {
     "joint1", "joint2", "joint3",
     "ex", "ey", "ez",
     "ax", "ay", "az",
     "error",
 }
-NORMALISED_FIELDS = {"q1", "q2", "q3", "x", "y", "z"}
-JOINT_LIMITS = {
-    "ned": ((-2.8, 2.8), (-0.8, 0.8), (0.0, 1.3)),
-    "scara": ((-0.73, 0.73), (0.0, 0.83), (-0.2, 0.0)),
-}
 
 
-def denormalise(value, lower, upper):
-    return (value + 1.0) / 2.0 * (upper - lower) + lower
-
-
-def load_dataset(path, robot):
-    """Load either a current normalised dataset or a legacy raw dataset."""
+def load_dataset(path):
+    """Load and validate a dataset produced by the shared generator."""
 
     with path.open(newline="", encoding="utf-8") as csv_file:
         reader = csv.DictReader(csv_file)
-        fields = set(reader.fieldnames or ())
-        source_rows = list(reader)
-
-    if RAW_FIELDS.issubset(fields):
-        rows = [{field: float(row[field]) for field in RAW_FIELDS} for row in source_rows]
-    elif NORMALISED_FIELDS.issubset(fields):
-        rows = []
-        for row in source_rows:
-            normalised = [float(row[f"q{index}"]) for index in range(1, 4)]
-            joints = [
-                denormalise(value, lower, upper)
-                for value, (lower, upper) in zip(normalised, JOINT_LIMITS[robot])
-            ]
-            x, y, z = (float(row[axis]) for axis in ("x", "y", "z"))
-            rows.append({
-                "joint1": joints[0], "joint2": joints[1], "joint3": joints[2],
-                "q1": normalised[0], "q2": normalised[1], "q3": normalised[2],
-                "ex": x, "ey": y, "ez": z,
-                "ax": x, "ay": y, "az": z,
-                "error": None,
-            })
-    else:
-        expected = sorted(RAW_FIELDS), sorted(NORMALISED_FIELDS)
-        raise ValueError(f"{path} does not match a supported CSV schema: {expected}")
+        missing = CSV_FIELDS.difference(reader.fieldnames or ())
+        if missing:
+            raise ValueError(f"{path} is missing columns: {sorted(missing)}")
+        rows = [
+            {field: float(row[field]) for field in CSV_FIELDS}
+            for row in reader
+        ]
 
     if not rows:
         raise ValueError(f"{path} contains no dataset rows")
