@@ -2,13 +2,57 @@ See the wiki for a basic tutorial.
 
 ## Structure
 
-- `controllers/main`: shared Ned/SCARA dataset entry point.
-- `controllers/common`: reusable arm control and dataset generation.
-- `controllers/fk_precision`: Task 1.C FK validation for both robots.
-- `scripts/forward_kinematics_*`: Task 1.B FK implementations.
-- `scripts/normalise_dataset.py`: Task 2 joint normalisation.
-- `data/visualise_dataset.py`: shared dataset inspection.
-- `worlds` and `protos`: Webots environments and Ned model assets.
+```text
+IR-coursework1/
+├── worlds/
+│   ├── articulated.wbt              # Ned simulation
+│   └── scara.wbt                    # SCARA simulation
+├── protos/
+│   └── TeachingNed.proto            # Ned model and TCP slot
+├── controllers/
+│   ├── main/main.py                 # Ned/SCARA dataset entry point
+│   ├── common/
+│   │   ├── arm_controller.py        # Motor movement and TCP measurement
+│   │   └── dataset_generator.py     # Shared sampling, filtering and CSV output
+│   └── fk_precision/fk_precision.py # Task 1.C simulator validation
+├── scripts/
+│   ├── forward_kinematics_ned.py    # Task 1.B Ned FK
+│   ├── forward_kinematics_scara.py  # Task 1.B SCARA FK
+│   ├── normalise_dataset.py         # Task 2 joint normalisation
+│   ├── run_fk_precision.sh          # Runs Task 1.C for both robots
+│   └── plot_fk_precision.py         # Summarises Task 1.C results
+└── data/
+    ├── csv/                         # Raw and processed datasets
+    ├── evaluation/                  # Task 1.C measurements and summary
+    ├── visualise_dataset.py         # Ned/SCARA visualisation entry point
+    └── visualisation/common.py      # Shared CSV and drawing helpers
+```
+
+### How the files connect
+
+```mermaid
+flowchart LR
+    W[Webots worlds] --> M[controllers/main/main.py]
+    M --> A[common/arm_controller.py]
+    M --> G[common/dataset_generator.py]
+    M --> FK[Ned and SCARA FK scripts]
+    G --> C[data/csv raw datasets]
+    C --> N[scripts/normalise_dataset.py]
+    C --> V[data/visualise_dataset.py]
+    N --> P[normalised datasets]
+
+    W --> R[scripts/run_fk_precision.sh]
+    R --> E[controllers/fk_precision/fk_precision.py]
+    E --> FK
+    E --> D[data/evaluation CSV files]
+    D --> Q[scripts/plot_fk_precision.py]
+```
+
+The worlds select `main.py` with either `ned` or `scara`. The main controller
+supplies the robot-specific joints and FK function to the shared generator. Raw
+CSV files can then be normalised for training or inspected with the shared
+visualiser. Task 1.C uses the same FK implementations through a separate
+evaluation controller so validation data stays independent of training data.
 
 ## Dataset generation
 
