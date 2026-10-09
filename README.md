@@ -15,3 +15,7 @@ fixed poses.
 All generated files use the generic columns `joint1`, `joint2`, and `joint3`.
 For SCARA, `joint3` represents the third active model output,
 `shaft_linear_motor` (the physical q4 joint).
+
+Before commanding Webots, the generator rejects poses whose FK endpoint is
+below the floor-clearance threshold: 0.14 m for Ned and 0.02 m for SCARA.
+It also rejects poses that fail to settle or exceed 1 mm FK/TCP error.

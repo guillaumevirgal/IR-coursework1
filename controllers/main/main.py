@@ -26,6 +26,8 @@ CONFIGS = {
         joint_limits=((-2.8, 2.8), (-0.8, 0.8), (0.0, 1.3)),
         forward_kinematics=forward_kinematics_ned,
         command_pose=lambda pose: pose,
+        # Below this, the wrist/gripper can contact the floor.
+        minimum_z=0.14,
     ),
     "scara": DatasetConfig(
         name="scara",
@@ -40,6 +42,8 @@ CONFIGS = {
         joint_limits=((-0.73, 0.73), (0.0, 0.83), (-0.2, 0.0)),
         forward_kinematics=forward_kinematics_scara,
         command_pose=lambda pose: (pose[0], pose[1], 0.0, pose[2]),
+        # Below this, the vertical shaft can contact the floor.
+        minimum_z=0.02,
     ),
 }
 

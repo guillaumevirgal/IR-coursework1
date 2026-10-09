@@ -27,12 +27,16 @@ class DatasetConfig:
     joint_limits: tuple
     forward_kinematics: object
     command_pose: object
+    minimum_z: float
 
 
 def random_pose(config, rng):
-    """Sample the three active joints within their configured limits."""
+    """Sample active joints until the FK endpoint clears the floor."""
 
-    return [rng.uniform(lower, upper) for lower, upper in config.joint_limits]
+    while True:
+        pose = [rng.uniform(lower, upper) for lower, upper in config.joint_limits]
+        if config.forward_kinematics(pose)[2] >= config.minimum_z:
+            return pose
 
 
 def initialise_csv(path):
@@ -62,6 +66,13 @@ def measure_pose(arm, config, pose, output_path, tolerance):
     """Command one pose and save it when FK agrees with Webots."""
 
     expected = config.forward_kinematics(pose)
+    if expected[2] < config.minimum_z:
+        print(
+            f"{config.name}: skipped pose because FK z={expected[2]:.4f} m "
+            f"is below the {config.minimum_z:.4f} m floor-clearance limit"
+        )
+        return False
+
     print(
         f"{config.name}: moving to {round_pose(pose)}, expected TCP (m): "
         f"({expected[0]:+.4f}, {expected[1]:+.4f}, {expected[2]:+.4f})"
