@@ -1,116 +1,96 @@
-See the wiki for a basic tutorial.
+# Intelligent Robotics Coursework 1
 
 ## Structure
 
 ```text
 IR-coursework1/
 ├── worlds/
-│   ├── articulated.wbt              # Ned simulation
-│   └── scara.wbt                    # SCARA simulation
-├── protos/
-│   └── TeachingNed.proto            # Ned model and TCP slot
+│   ├── articulated.wbt                 # Ned simulation
+│   └── scara.wbt                       # SCARA simulation
+├── protos/TeachingNed.proto            # Ned model and TCP slot
 ├── controllers/
-│   ├── main/main.py                 # Ned/SCARA dataset entry point
-│   ├── common/
-│   │   ├── arm_controller.py        # Motor movement and TCP measurement
-│   │   └── dataset_generator.py     # Shared sampling, filtering and CSV output
-│   └── fk_precision/fk_precision.py # Task 1.C simulator validation
+│   ├── common/arm_controller.py        # Webots motor and TCP control
+│   └── fk_precision/fk_precision.py    # Task 1.C simulator validation
 ├── scripts/
-│   ├── forward_kinematics_ned.py    # Task 1.B Ned FK
-│   ├── forward_kinematics_scara.py  # Task 1.B SCARA FK
-│   ├── normalise_dataset.py         # Task 2 joint normalisation
-│   ├── run_fk_precision.sh          # Runs Task 1.C for both robots
-│   └── plot_fk_precision.py         # Summarises Task 1.C results
+│   ├── forward_kinematics_ned.py       # Task 1.B Ned FK
+│   ├── forward_kinematics_scara.py     # Task 1.B SCARA FK
+│   ├── dataset_generation/common.py    # Shared Task 2 generation core
+│   ├── generate_datasets.py            # Task 2 Ned/SCARA entry point
+│   ├── run_fk_precision.sh             # Runs Task 1.C for both robots
+│   └── plot_fk_precision.py            # Summarises Task 1.C results
 └── data/
-    ├── csv/                         # Raw and processed datasets
-    ├── evaluation/                  # Task 1.C measurements and summary
-    ├── visualise_dataset.py         # Ned/SCARA visualisation entry point
-    └── visualisation/common.py      # Shared CSV and drawing helpers
+    ├── datasets/                       # Task 2 train/validation/test files
+    ├── evaluation/                     # Task 1.C results
+    ├── visualise_dataset.py            # Shared visualisation entry point
+    └── visualisation/common.py         # CSV and robot drawing helpers
 ```
 
 ### How the files connect
 
 ```mermaid
 flowchart LR
-    W[Webots worlds] --> M[controllers/main/main.py]
-    M --> A[common/arm_controller.py]
-    M --> G[common/dataset_generator.py]
-    M --> FK[Ned and SCARA FK scripts]
-    G --> C[data/csv raw datasets]
-    C --> N[scripts/normalise_dataset.py]
-    C --> V[data/visualise_dataset.py]
-    N --> P[normalised datasets]
+    G[scripts/generate_datasets.py] --> C[dataset_generation/common.py]
+    C --> FK[Ned and SCARA FK scripts]
+    C --> D[data/datasets normalised CSV files]
+    D --> V[data/visualise_dataset.py]
 
-    W --> R[scripts/run_fk_precision.sh]
+    W[Webots worlds] --> R[scripts/run_fk_precision.sh]
     R --> E[controllers/fk_precision/fk_precision.py]
+    E --> A[common/arm_controller.py]
     E --> FK
-    E --> D[data/evaluation CSV files]
-    D --> Q[scripts/plot_fk_precision.py]
+    E --> Q[data/evaluation results]
+    Q --> P[scripts/plot_fk_precision.py]
 ```
 
-The worlds select `main.py` with either `ned` or `scara`. The main controller
-supplies the robot-specific joints and FK function to the shared generator. Raw
-CSV files can then be normalised for training or inspected with the shared
-visualiser. Task 1.C uses the same FK implementations through a separate
-evaluation controller so validation data stays independent of training data.
+Task 1.C validates each FK implementation against Webots. Once validated, Task
+2 calls FK directly, avoiding a slow physical simulation move for every training
+row. This keeps simulator evaluation separate from generated training data.
 
 ## Dataset generation
 
-The shared generation logic is in `controllers/common/dataset_generator.py`.
-Both robots use `controllers/main/main.py`; their world files pass either
-`ned` or `scara` as the first controller argument. Starting either world
-continuously generates random elbow-up samples under `data/csv/`.
+Generate all Ned and SCARA datasets without starting Webots:
 
-This separation keeps sampling and CSV behaviour identical while leaving motor
-names, limits, FK and fixed joints in one small robot configuration. Elbow-up
-sampling makes the position-to-joint mapping single-valued for model training.
+```bash
+python3 scripts/generate_datasets.py both
+```
 
-The main controller accepts optional Webots arguments. For example,
-`scara --samples 1000 --seed 42` generates exactly 1,000 valid, reproducible
-SCARA rows and then closes the simulation. Edit `POSES` in `main.py` to check
-fixed poses.
+Defaults are 1,000, 5,000 and 10,000 total samples before each 80/20 split,
+plus a separate 500-row test set. The sets are nested: small is contained in
+medium, and medium in large. Use `--sizes`, `--test-size` and `--seed` to change
+these settings. Output is written under `data/datasets/ned/` and
+`data/datasets/scara/`.
 
-All generated files use the generic columns `joint1`, `joint2`, and `joint3` so
-both robots can train one network. For SCARA, `joint3` is the third active model
-output, `shaft_linear_motor` (physical q4). Values remain raw here so the FK and
-Webots measurements are auditable; normalisation is a separate processing step.
-
-Before commanding Webots, the generator rejects poses whose FK endpoint is
-below the floor-clearance threshold: 0.14 m for Ned and 0.02 m for SCARA.
-These limits avoid known floor contacts. It also rejects poses that fail to
-settle or exceed 1 mm FK/TCP error, preventing obstructed or inaccurate rows
-from entering the dataset. A fixed seed makes comparisons reproducible.
+The shared core keeps sampling, splitting and CSV behaviour identical. The main
+script supplies each robot's limits, FK and floor clearance. Elbow-up sampling
+makes the position-to-joint mapping single-valued. Joint outputs are normalised
+to `[-1, 1]`; SCARA `q3` represents its third active output,
+`shaft_linear_motor` (physical q4).
 
 ### Dataset acceptance and rejection
 
-Only accepted rows count toward `--samples`. Rejected random poses are replaced
-by newly sampled poses until the requested number of rows has been saved.
-
 | Rule | Result | Justification |
 |---|---|---|
-| Ned `joint_3` or SCARA `arm_motor` would be negative | Never sampled | The positive range keeps the required elbow-up configuration and avoids two joint solutions for one TCP position. |
-| Ned FK gives `z < 0.14 m` | Resample before moving | Below this height the Ned wrist or gripper can contact the floor, making the measured position unreliable. |
-| SCARA FK gives `z < 0.02 m` | Resample before moving | Below this height the SCARA shaft can contact the floor before reaching the requested extension. |
-| Motors do not settle within 10 simulated seconds | Skip the pose | A blocked or unreachable movement does not provide a reliable joint/TCP pair. |
-| FK and Webots TCP differ by more than `0.001 m` | Skip the row | The 1 mm threshold prevents inaccurate FK/TCP pairs from entering the training data. |
-| All checks pass | Append the row | The joints, FK position, Webots position and error remain available for auditing and later processing. |
+| Ned `joint_3` or SCARA `arm_motor` would be negative | Never sampled | The positive range keeps only the required elbow-up solution. |
+| Ned FK gives `z < 0.14 m` | Resample | Avoids known Ned wrist/gripper contact with the floor. |
+| SCARA FK gives `z < 0.02 m` | Resample | Avoids known SCARA shaft contact with the floor. |
+| TCP position duplicates an existing row | Resample | Keeps train, validation and test positions distinct. |
+| All checks pass | Save the row | Store normalised joints with the FK-derived TCP position. |
 
-The height checks prevent the known floor contacts; they are not a general
-self-collision detector. The generator also does not remove duplicate samples
-or normalise values. Normalisation remains separate so the raw evidence is
-preserved.
+The height rules prevent known floor contact; they are not a general
+self-collision detector. Simulator settling and FK/TCP error are evaluated in
+Task 1.C rather than repeated for every Task 2 row.
 
 ## Dataset visualisation
 
-`data/visualise_dataset.py` uses the shared geometry and CSV helpers in
-`data/visualisation/common.py` for both robots. It displays the TCP distribution,
-one robot pose, and the FK/Webots error histogram. Sharing the plots makes the
-robots directly comparable while retaining their different geometry. For example:
+The shared visualiser supports both current normalised datasets and older raw
+FK/Webots comparison CSVs:
 
 ```bash
-python3 data/visualise_dataset.py ned data/csv/ned_robot_data_1e-3.csv
-python3 data/visualise_dataset.py scara data/csv/scara_robot_data_1e-3.csv
+python3 data/visualise_dataset.py ned data/datasets/ned/train_small.csv
+python3 data/visualise_dataset.py scara data/datasets/scara/train_small.csv
 ```
 
-Use `--row` to select the pose, `--tcp-source expected` to plot FK positions,
-or `--save figure.png` to save without opening an interactive window.
+It displays the TCP distribution, a selected robot pose and either normalised
+joint distributions or the available FK/Webots error histogram. Use `--row` to
+select a pose, `--tcp-source expected` for a raw comparison file, or
+`--save figure.png` to save the figure.

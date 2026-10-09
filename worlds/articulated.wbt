@@ -37,10 +37,7 @@ Robot {
   supervisor TRUE
 }
 DEF ARM TeachingNed {
-  controller "main"
-  controllerArgs [
-    "ned"
-  ]
+  controller "<none>"
   supervisor TRUE
   tcpSlot [
     DEF TCP Pose {

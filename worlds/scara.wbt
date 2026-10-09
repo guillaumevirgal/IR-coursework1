@@ -23,10 +23,7 @@ Robot {
   supervisor TRUE
 }
 DEF ARM ScaraT6 {
-  controller "main"
-  controllerArgs [
-    "scara"
-  ]
+  controller "<none>"
   supervisor TRUE
   staticBase TRUE
   handSlot [
