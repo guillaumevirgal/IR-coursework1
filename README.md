@@ -19,3 +19,17 @@ For SCARA, `joint3` represents the third active model output,
 Before commanding Webots, the generator rejects poses whose FK endpoint is
 below the floor-clearance threshold: 0.14 m for Ned and 0.02 m for SCARA.
 It also rejects poses that fail to settle or exceed 1 mm FK/TCP error.
+
+## Dataset visualisation
+
+`data/visualise_dataset.py` uses the shared geometry and CSV helpers in
+`data/visualisation/common.py` for both robots. It displays the TCP distribution,
+one robot pose, and the FK/Webots error histogram. For example:
+
+```bash
+python3 data/visualise_dataset.py ned data/csv/ned_robot_data_1e-3.csv
+python3 data/visualise_dataset.py scara data/csv/scara_robot_data_1e-3.csv
+```
+
+Use `--row` to select the pose, `--tcp-source expected` to plot FK positions,
+or `--save figure.png` to save without opening an interactive window.
