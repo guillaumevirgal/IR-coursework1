@@ -1,0 +1,5 @@
+# Numerical arrays for neural-network training and evaluation.
+numpy>=1.24,<3
+
+# Plots for FK precision and dataset visualisation.
+matplotlib>=3.7,<4

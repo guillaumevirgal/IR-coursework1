@@ -15,6 +15,7 @@ IR-coursework1/
 │   └── fk_precision/fk_precision.py    # Task 1.C FK check in Webots
 ├── scripts/
 │   ├── run_dataset_generation.py       # Master generation and splitting command
+│   ├── install_dependencies.py          # Install Python packages from requirements.txt
 │   ├── forward_kinematics_ned.py       # Task 1.B Ned FK
 │   ├── forward_kinematics_scara.py     # Task 1.B SCARA FK
 │   ├── run_fk_precision.sh             # Run Task 1.C for both arms
@@ -26,6 +27,31 @@ IR-coursework1/
     ├── visualise_dataset.py             # Shared Ned/SCARA audit visualiser
     └── visualisation/common.py          # CSV parsing and arm drawing helpers
 ```
+
+## Install dependencies
+
+Create or activate a Python virtual environment, then run the installer with
+that environment's Python:
+
+```bash
+python -m venv .venv
+```
+
+On Windows:
+
+```powershell
+.venv\Scripts\python.exe scripts\install_dependencies.py
+```
+
+On Linux or macOS:
+
+```bash
+./.venv/bin/python scripts/install_dependencies.py
+```
+
+The installer reads `requirements.txt` and installs NumPy and Matplotlib into
+the interpreter used to run it. Webots is a separate application and must be
+installed separately; its Python controller API is supplied by Webots.
 
 The master runner starts Webots headlessly. The selected world calls
 `controllers/main/main.py`, which supplies the robot-specific joint names,
