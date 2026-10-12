@@ -4,12 +4,13 @@ import csv
 import math
 
 
-CSV_FIELDS = {
+CSV_FIELDS = (
+    "robot", "seed", "attempt", "accepted", "rejection_reason",
     "joint1", "joint2", "joint3",
     "ex", "ey", "ez",
     "ax", "ay", "az",
     "error",
-}
+)
 
 
 def load_dataset(path):
@@ -17,13 +18,24 @@ def load_dataset(path):
 
     with path.open(newline="", encoding="utf-8") as csv_file:
         reader = csv.DictReader(csv_file)
-        missing = CSV_FIELDS.difference(reader.fieldnames or ())
+        missing = set(CSV_FIELDS).difference(reader.fieldnames or ())
         if missing:
             raise ValueError(f"{path} is missing columns: {sorted(missing)}")
-        rows = [
-            {field: float(row[field]) for field in CSV_FIELDS}
-            for row in reader
-        ]
+        rows = []
+        for row in reader:
+            values = {
+                field: (float(row[field]) if row[field] != "" else None)
+                for field in CSV_FIELDS
+                if field not in ("robot", "seed", "attempt", "accepted", "rejection_reason")
+            }
+            values.update({
+                "robot": row["robot"],
+                "seed": int(row["seed"]),
+                "attempt": int(row["attempt"]),
+                "accepted": row["accepted"] == "1",
+                "rejection_reason": row["rejection_reason"],
+            })
+            rows.append(values)
 
     if not rows:
         raise ValueError(f"{path} contains no dataset rows")
@@ -37,6 +49,7 @@ def tcp_positions(rows, source):
     return [
         (row[f"{prefix}x"], row[f"{prefix}y"], row[f"{prefix}z"])
         for row in rows
+        if row[f"{prefix}x"] is not None
     ]
 
 
