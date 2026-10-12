@@ -3,7 +3,6 @@
 import argparse
 import csv
 import os
-import random
 import shutil
 import subprocess
 import tempfile
@@ -78,7 +77,7 @@ def write_dataset(path, rows):
         writer.writerows(rows)
 
 
-def create_splits(master_path, output_dir, robot, *, small, medium, large, test, seed):
+def create_splits(master_path, output_dir, robot, *, small, medium, large, test):
     """Create nested 80/20 train/validation sets and a separate test set."""
 
     sizes = (small, medium, large)
@@ -103,14 +102,13 @@ def create_splits(master_path, output_dir, robot, *, small, medium, large, test,
     needed = test + large
     if len(rows) < needed:
         raise ValueError(f"Need {needed} master rows for splits, found {len(rows)}")
-    random.Random(seed).shuffle(rows)
+    # Master rows are already randomly generated. Keeping their order makes
+    # existing test and nested train/validation prefixes stable on resume.
     test_rows = rows[:test]
     development = rows[test:needed]
     training = [row for index, row in enumerate(development) if index % 5 != 0]
     validation = [row for index, row in enumerate(development) if index % 5 == 0]
 
-    if output_dir.exists():
-        raise FileExistsError(f"Refusing to overwrite split directory: {output_dir}")
     write_dataset(output_dir / "test.csv", test_rows)
     for label, size in (("small", small), ("medium", medium), ("large", large)):
         count = size // 5
@@ -193,12 +191,14 @@ def main():
             nn_path = raw_path.with_name(f"{raw_path.stem.removesuffix('_audit')}_nn.csv")
         nn_path = nn_path.resolve()
         split_dir = ROOT / "data" / "nn" / "splits" / robot
-        for destination in (raw_path, nn_path, split_dir):
-            if destination.exists():
-                raise FileExistsError(
-                    f"Refusing to overwrite existing dataset: {destination}. Choose another path."
-                )
-            destination.parent.mkdir(parents=True, exist_ok=True)
+        if not raw_path.exists() and (nn_path.exists() or split_dir.exists()):
+            raise FileExistsError(
+                f"Found derived outputs without their raw audit for {robot}; "
+                "restore the audit or move the derived outputs before generating."
+            )
+        raw_path.parent.mkdir(parents=True, exist_ok=True)
+        nn_path.parent.mkdir(parents=True, exist_ok=True)
+        split_dir.parent.mkdir(parents=True, exist_ok=True)
         outputs[robot] = (raw_path, nn_path, split_dir)
 
     for robot in robots:
@@ -229,7 +229,6 @@ def main():
             medium=args.medium,
             large=args.large,
             test=args.test,
-            seed=args.seed + 1,
         )
         print(f"Saved raw audit: {raw_path}")
         print(f"Saved NN dataset: {nn_path}")

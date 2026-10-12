@@ -5,7 +5,7 @@ import math
 
 
 CSV_FIELDS = (
-    "attempt", "accepted", "rejection_reason",
+    "robot", "seed", "attempt", "accepted", "rejection_reason",
     "joint1", "joint2", "joint3",
     "ex", "ey", "ez",
     "ax", "ay", "az",
@@ -26,9 +26,11 @@ def load_dataset(path):
             values = {
                 field: (float(row[field]) if row[field] != "" else None)
                 for field in CSV_FIELDS
-                if field not in ("attempt", "accepted", "rejection_reason")
+                if field not in ("robot", "seed", "attempt", "accepted", "rejection_reason")
             }
             values.update({
+                "robot": row["robot"],
+                "seed": int(row["seed"]),
                 "attempt": int(row["attempt"]),
                 "accepted": row["accepted"] == "1",
                 "rejection_reason": row["rejection_reason"],

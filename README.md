@@ -67,34 +67,31 @@ data/nn/splits/ned/
 └── test.csv
 ```
 
-The equivalent SCARA files are created alongside the Ned files. Existing
-outputs are not overwritten. To use different split sizes, pass `--small`,
+The equivalent SCARA files are created alongside the Ned files. The raw audit
+is retained as a checkpoint; NN and split files are rebuilt from it on each
+completed run. To use different split sizes, pass `--small`,
 `--medium`, `--large`, and `--test`;
 the generation count must be at least `large + test`.
 
 ### Running it again
 
-The runner does not append to or resume an earlier run. Before starting, it
-checks that the raw audit file, NN master file, and split directory do not
-already exist. If any one exists, it stops before launching Webots. A run that
-was interrupted may leave a partial raw audit file; that file also blocks a
-restart.
+The raw audit is the resume checkpoint. If a run is interrupted, run the same
+command again with the same robot and seed. The controller counts accepted
+rows already in the audit, skips past the recorded random attempts, and
+generates only the remaining rows needed to reach the requested accepted
+sample count. It prints the existing count, remaining count, and a completion
+message when the target is reached. It trims an incomplete final CSV line left
+by an abrupt stop. The NN master and split files are then rebuilt from the
+checkpoint; the test and nested split prefixes stay stable as the master grows.
 
-To start a fresh run, first move or remove the previous outputs for each robot:
-
-```text
-data/raw/ned_master_audit.csv
-data/nn/ned_master.csv
-data/nn/splits/ned/
-data/raw/scara_master_audit.csv
-data/nn/scara_master.csv
-data/nn/splits/scara/
-```
-
-When using `both`, clear the outputs for both arms before rerunning. The runner
-checks both sets of destinations before it starts, so an existing Ned output
-also prevents a `both` run from starting SCARA. Keep a copy of the audit files
-if you need to preserve the previous dataset.
+Use the same seed when resuming. A different seed is rejected because mixing
+random sequences would make the checkpoint ambiguous. Existing audit files
+from the immediately preceding format are upgraded using the supplied seed;
+those files did not store their original seed, so resume with the seed used for
+that run. If derived NN or split files exist without their raw audit, the
+runner stops and asks you to restore the audit or move those files. To start a
+completely new dataset, move or remove that robot's raw audit and derived NN
+outputs first. With `both`, each robot resumes independently.
 
 The runner finds Webots through `PATH`, `WEBOTS_HOME`, or a standard install
 location on Windows, Linux, or macOS. If needed, specify it explicitly:
@@ -105,10 +102,11 @@ python scripts/run_dataset_generation.py ned 16000 42 --webots "C:\\Program File
 
 ## What goes into the files
 
-The raw audit CSV records every attempted pose:
+The raw audit CSV records every attempted pose, along with the robot and
+generation seed:
 
 ```text
-attempt,accepted,rejection_reason,
+robot,seed,attempt,accepted,rejection_reason,
 joint1,joint2,joint3,
 ex,ey,ez,ax,ay,az,error
 ```
