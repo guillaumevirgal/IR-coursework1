@@ -57,15 +57,18 @@ def parse_args():
     parser.add_argument("--samples", type=int, default=None)
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--output", type=Path, default=None)
+    parser.add_argument("--nn-output", type=Path, default=None)
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
-    output = args.output or ROOT / "data" / "csv" / f"{args.robot}_robot_data_1e-3.csv"
+    output = args.output or ROOT / "data" / "raw" / f"{args.robot}_master_audit.csv"
+    nn_output = args.nn_output or ROOT / "data" / "nn" / f"{args.robot}_master.csv"
     generate_dataset(
         CONFIGS[args.robot],
         output,
+        nn_output,
         samples=args.samples,
         seed=args.seed,
         poses=POSES[args.robot],
