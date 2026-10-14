@@ -1,0 +1,18 @@
+{
+  "robots": [
+    "ned",
+    "scara"
+  ],
+  "size": "small",
+  "hidden": [
+    64,
+    64
+  ],
+  "lr": 0.001,
+  "batch": 32,
+  "epochs": 3000,
+  "patience": 300,
+  "seed": 2026,
+  "best_epoch": 1437,
+  "best_val_mse": 0.0008103973500280058
+}
