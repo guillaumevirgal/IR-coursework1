@@ -95,6 +95,11 @@ banner, while the unreachable cases are labelled separately. It writes one PNG p
 workspace boundary and target/result markers from a focused comparison of the
 five closest training points and the robot's final position, measured in millimetres
 from the requested point.
+It also writes a side-by-side overview per robot comparing how close each
+reachable and unreachable target is to its nearest training point:
+`ned_reachable_vs_unreachable.png` and `scara_reachable_vs_unreachable.png`.
+Both panels share one distance scale; the dashed line marks typical spacing
+between training points. Points beyond it have fewer nearby examples.
 They identify known reachable and unreachable stress targets and show the
 Webots TCP error. The workspace estimate does not include collision checking;
 user-specified targets are not classified automatically.

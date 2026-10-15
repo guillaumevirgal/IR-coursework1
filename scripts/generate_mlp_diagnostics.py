@@ -341,6 +341,61 @@ def draw_case(robot, model_name, case, result, workspace_boundary, output):
     plt.close(fig)
 
 
+def draw_reachability_comparison(robot, rows, output):
+    """Compare training-data distance for reachable and unreachable targets."""
+    groups = (
+        ("Reachable targets", "reachable test point", "#4c956c"),
+        ("Unreachable targets", "unreachable stress case", "#e07a3f"),
+    )
+    selected = [
+        [(row, color) for row in rows if row["kind"] == kind]
+        for _, kind, color in groups
+    ]
+    if not any(selected):
+        return
+
+    max_distance = max(
+        float(row["nearest_training_distance_m"]) * 1000.0
+        for group in selected for row, _ in group
+    )
+    max_spacing = max(float(row["training_spacing_p95_m"]) * 1000.0 for row in rows)
+    right = max(max_distance, max_spacing, 1.0) * 1.45
+    height = max(4.0, 1.0 + 0.55 * max(len(group) for group in selected))
+    fig, axes = plt.subplots(1, 2, figsize=(12, height), sharex=True)
+    for ax, (title, _, color), group in zip(axes, groups, selected):
+        spacing = float(group[0][0]["training_spacing_p95_m"]) * 1000.0 if group else max_spacing
+        ax.axvspan(0, spacing, color="#e9f2e8", alpha=0.9, zorder=0)
+        ax.axvline(spacing, color="#555555", linestyle="--", linewidth=1.2,
+                   label=f"usual training spacing: {spacing:.1f} mm")
+        if group:
+            for index, (row, point_color) in enumerate(group):
+                distance = float(row["nearest_training_distance_m"]) * 1000.0
+                ax.scatter(distance, index, s=85, color=point_color, zorder=3)
+                ax.annotate(f"{distance:.1f} mm", (distance, index), xytext=(7, 0),
+                            textcoords="offset points", va="center", fontsize=9)
+            ax.set_yticks(np.arange(len(group)), [row["label"].replace("_", " ") for row, _ in group])
+            ax.set_ylim(len(group) - 0.4, -0.6)
+        else:
+            ax.text(0.5, 0.5, "No points", ha="center", va="center", transform=ax.transAxes)
+            ax.set_yticks([])
+        ax.set_title(title, fontsize=12, weight="bold")
+        ax.set_xlim(0, right)
+        ax.grid(axis="x", alpha=0.2)
+        ax.legend(loc="lower right", fontsize=8, framealpha=0.95)
+        ax.spines[["top", "right", "left"]].set_visible(False)
+        ax.tick_params(axis="y", length=0)
+
+    fig.suptitle(f"{robot.upper()}: are requests near the training data?", fontsize=14, y=0.98)
+    fig.supxlabel("Distance to closest training example (mm) — smaller means closer", y=0.07)
+    fig.text(0.5, 0.02,
+             "Each dot is one target. Beyond the dashed line means few nearby training examples.",
+             ha="center", fontsize=9)
+    fig.tight_layout(rect=(0.03, 0.16, 0.98, 0.92), w_pad=2.0)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output, dpi=160)
+    plt.close(fig)
+
+
 def _ned_chain(q):
     q1, q2, _ = q
     from scripts.forward_kinematics_ned import SHOULDER_HEIGHT, UPPER_ARM_REACH, UPPER_ARM_RISE
@@ -376,6 +431,7 @@ def main():
     args.output.mkdir(parents=True, exist_ok=True)
     summary_rows = []
     for robot in robots:
+        robot_summary_rows = []
         cases = robot_points(robot, args.samples) + extra_points(args.points_csv, robot)
         labels = [case["label"] for case in cases]
         if len(labels) != len(set(labels)):
@@ -394,7 +450,7 @@ def main():
             filename = f"{robot}_{case['label']}.png"
             draw_case(robot, args.model, case, result, workspace_boundary,
                       args.output / filename)
-            summary_rows.append({"robot": robot, "label": case["label"], "kind": case["kind"],
+            row = {"robot": robot, "label": case["label"], "kind": case["kind"],
                 "x": result["target"][0], "y": result["target"][1], "z": result["target"][2],
                 "nearest_training_distance_m": float(np.min(result["distances"])),
                 "training_spacing_p95_m": support_95, "weak_training_support": result["weak_support"],
@@ -404,7 +460,12 @@ def main():
                 "fk_target_error_mm": result["fk_target_error_mm"],
                 "fk_webots_gap_mm": result["fk_webots_gap_mm"],
                 "webots_error_mm": result["webots_error_mm"],
-                "settled": result["settled"], "settle_seconds": result["settle_seconds"], "figure": filename})
+                "settled": result["settled"], "settle_seconds": result["settle_seconds"], "figure": filename}
+            summary_rows.append(row)
+            robot_summary_rows.append(row)
+        comparison_path = args.output / f"{robot}_reachable_vs_unreachable.png"
+        draw_reachability_comparison(robot, robot_summary_rows, comparison_path)
+        print(f"Reachable vs unreachable comparison: {comparison_path}")
     summary_path = args.output / "summary.csv"
     if summary_rows:
         with summary_path.open("w", newline="", encoding="utf-8") as destination:
