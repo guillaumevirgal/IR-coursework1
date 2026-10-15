@@ -122,6 +122,11 @@ def temporary_world(robot, samples, seed, output, nn_output):
 
     source = ROOT / "worlds" / WORLDS[robot]
     text = source.read_text(encoding="utf-8")
+    controller = '  controller "mlp_ik"'
+    if text.count(controller) != 1:
+        raise RuntimeError(f"Expected one MLP controller in {source}")
+    text = text.replace(controller, '  controller "generate_dataset"', 1)
+
     marker = f'    "{robot}"'
     if text.count(marker) != 1:
         raise RuntimeError(f"Expected one {robot!r} controller argument in {source}")

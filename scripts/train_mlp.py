@@ -30,8 +30,9 @@ MODELS = ROOT / "models"
 INPUTS = ("is_scara", "is_ned", "x", "y", "z")
 OUTPUTS = ("q1", "q2", "q3")
 
-# Must match the sampling ranges in controllers/main/main.py (not imported
-# directly because that module needs the Webots controller API).
+# Must match the sampling ranges in
+# controllers/generate_dataset/generate_dataset.py (not imported directly
+# because that module needs the Webots controller API).
 JOINT_LIMITS = {
     "ned": ((-2.8, 2.8), (-0.8, 0.8), (0.0, 1.3)),
     "scara": ((-0.73, 0.73), (0.0, 0.83), (-0.2, 0.0)),

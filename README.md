@@ -8,7 +8,10 @@ IR-coursework1/
 │   ├── articulated.wbt                 # Ned Webots world
 │   └── scara.wbt                       # SCARA Webots world
 ├── controllers/
-│   ├── main/main.py                    # Robot config and Webots entry point
+│   ├── mlp_ik/
+│   │   └── mlp_ik.py                   # Shared neural IK controller for both arms
+│   ├── generate_dataset/
+│   │   └── generate_dataset.py         # Webots dataset-generation entry point
 │   ├── common/
 │   │   ├── arm_controller.py           # Motor movement and TCP measurement
 │   │   └── dataset_generator.py        # Sample, audit, reject, export NN rows
@@ -53,13 +56,24 @@ The installer reads `requirements.txt` and installs NumPy and Matplotlib into
 the interpreter used to run it. Webots is a separate application and must be
 installed separately; its Python controller API is supplied by Webots.
 
-The master runner starts Webots headlessly. The selected world calls
-`controllers/main/main.py`, which supplies the robot-specific joint names,
-limits, FK function, and TCP slot to the shared generator. The generator writes
-the audit. When generation finishes, it derives the ready-to-train master CSV;
-the runner then creates nested train/validation sets and an independent test
-set. The visualiser reads the raw audit so measurements and rejected attempts
-remain inspectable.
+Opening either world runs `controllers/mlp_ik/mlp_ik.py`, the shared trained
+network controller. The world passes `ned` or `scara` so the controller uses
+the matching input flag, joint limits, motors, and forward-kinematics check.
+Both worlds include a reachable target sphere. The controller loads
+`mlp_ned_scara_large_h64x64_cosine` by default; to select another model, add
+`"--model=MODEL_NAME"` to that world's `controllerArgs` list.
+
+While the simulation is running, use the arrow keys to move the red target
+sphere in X/Y and Page Up/Page Down to change Z. Hold Shift for smaller
+adjustments. Network accuracy is not guaranteed outside its trained workspace.
+
+Dataset generation is separate: the master runner starts Webots headlessly and
+temporarily selects `controllers/generate_dataset/generate_dataset.py`. That
+entry point supplies the robot-specific joint names, limits, FK function, and
+TCP slot to the shared generator. The generator writes the audit; when it
+finishes, it derives the ready-to-train master CSV. The runner then creates
+nested train/validation sets and an independent test set. The visualiser reads
+the raw audit so measurements and rejected attempts remain inspectable.
 
 ## Generate the datasets
 

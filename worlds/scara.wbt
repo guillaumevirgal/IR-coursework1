@@ -17,13 +17,28 @@ TexturedBackgroundLight {
 }
 Floor {
 }
+DEF TARGET Pose {
+  # Reachable SCARA target for the default start pose (q1=0, q2=0.3, lift=-0.05).
+  translation 0.61461 0.07543 0.132
+  children [
+    Shape {
+      appearance PBRAppearance {
+        baseColor 1 0 0
+        roughness 0.5
+      }
+      geometry Sphere {
+        radius 0.025
+      }
+    }
+  ]
+}
 Robot {
   name "position"
   controller "<none>"
   supervisor TRUE
 }
 DEF ARM ScaraT6 {
-  controller "main"
+  controller "mlp_ik"
   controllerArgs [
     "scara"
   ]
