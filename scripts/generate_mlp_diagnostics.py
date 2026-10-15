@@ -221,19 +221,18 @@ def draw_case(robot, model_name, case, result, train_q, workspace_boundary, outp
     ax_arm = fig.add_subplot(222, projection="3d")
     ax_neighbors = fig.add_subplot(223)
     ax_flow = fig.add_subplot(224)
-    ax_space.scatter(*workspace_boundary.T, s=7, c="#45a89b", alpha=0.24,
+    ax_space.scatter(*workspace_boundary.T, s=7, c="#b8b8b8", alpha=0.32,
                      label="estimated workspace boundary")
     ax_space.scatter(*target, marker="x", s=100, c="#e15759", linewidths=3, label="requested TCP")
-    ax_space.scatter(*actual, marker="^", s=65, c="#59a14f", label="measured Webots TCP")
+    ax_space.scatter(*actual, marker="o", s=65, c="#2878b5", label="Webots TCP")
     ax_space.plot([target[0], actual[0]], [target[1], actual[1]], [target[2], actual[2]],
-                  color="#e15759", linewidth=2, label="target-to-measured error")
+                  color="#d62728", linestyle="--", linewidth=2, label="target-to-result error")
     ax_space.set_title("Joint-limited workspace boundary and this target")
     ax_space.set_xlabel("x (m)"); ax_space.set_ylabel("y (m)"); ax_space.set_zlabel("z (m)")
     ax_space.legend(loc="upper left", fontsize=7, framealpha=0.94,
                     title="Workspace and target", title_fontsize=8)
     ax_space.text2D(0.02, 0.02,
-                    "Boundary sampled from FK and joint limits; floor height applied. "
-                    "Collision checking is not included.",
+                    "Grey boundary: FK + joint limits + floor height; collisions not checked.",
                     transform=ax_space.transAxes, fontsize=7,
                     bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.88, edgecolor="#cccccc"))
 
@@ -243,9 +242,9 @@ def draw_case(robot, model_name, case, result, train_q, workspace_boundary, outp
     chain = _ned_chain(q) if robot == "ned" else _scara_chain(q)
     chain[-1] = actual
     arm = np.asarray(chain)
-    ax_arm.plot(*arm.T, "o-", color="#4e79a7", linewidth=5, markersize=7, label="settled Webots arm")
+    ax_arm.plot(*arm.T, "o-", color="#555555", linewidth=5, markersize=7, label="settled arm")
     ax_arm.scatter(*target, marker="x", s=110, c="#e15759", linewidths=3, label="requested target")
-    ax_arm.scatter(*actual, marker="^", s=70, c="#59a14f", label="measured TCP")
+    ax_arm.scatter(*actual, marker="o", s=70, c="#2878b5", label="Webots TCP")
     limits = np.vstack((arm, target))
     low, high = limits.min(axis=0), limits.max(axis=0)
     center = (low + high) / 2
@@ -259,36 +258,45 @@ def draw_case(robot, model_name, case, result, train_q, workspace_boundary, outp
                   title="Pose markers", title_fontsize=8)
 
     # Compare stored labels for the closest input examples with this prediction.
-    # The heat colors saturate at normalized joint limits; text keeps exact values.
     nearest_q = train_q[result["nearest"]]
     matrix = np.vstack((nearest_q, result["raw"], result["clipped"]))
-    color_matrix = np.clip(matrix, -1.0, 1.0)
     nearest_labels = [
         f"Train {i + 1} ({result['distances'][row] * 1000:.1f} mm)"
         for i, row in enumerate(result["nearest"])
     ]
     row_labels = nearest_labels + ["MLP raw", "After clip"]
-    image = ax_neighbors.imshow(color_matrix, cmap="coolwarm", vmin=-1, vmax=1, aspect="auto")
-    for row in range(matrix.shape[0]):
-        for col in range(matrix.shape[1]):
-            color_value = color_matrix[row, col]
-            ink = "white" if abs(color_value) > 0.58 else "black"
-            ax_neighbors.text(col, row, f"{matrix[row, col]:+.2f}", ha="center", va="center",
-                              fontsize=8, color=ink)
-    ax_neighbors.set_yticks(np.arange(len(row_labels)), row_labels)
-    ax_neighbors.set_xticks(np.arange(3), JOINT_NAMES)
+    cell_rows = [[label, *(f"{value:+.2f}" for value in values)]
+                 for label, values in zip(row_labels, matrix)]
+    table = ax_neighbors.table(cellText=cell_rows, colLabels=("Reference / output", *JOINT_NAMES),
+                               colWidths=(0.52, 0.16, 0.16, 0.16), cellLoc="center",
+                               bbox=(0.0, 0.0, 1.0, 0.78))
+    table.auto_set_font_size(False)
+    table.set_fontsize(8)
+    for (row, _col), cell in table.get_celld().items():
+        cell.set_edgecolor("#bdbdbd")
+        cell.set_linewidth(0.6)
+        if row == 0:
+            cell.set_facecolor("#e5e5e5")
+            cell.set_text_props(weight="bold")
+        elif row <= 5:
+            cell.set_facecolor("#f4f4f4")
+        elif row == 6:
+            cell.set_facecolor("#ffffff")
+            cell.set_text_props(weight="bold")
+        else:
+            cell.set_facecolor("#eaeaea")
+            cell.set_text_props(weight="bold")
+    ax_neighbors.set_axis_off()
     nearest_distance = result["distances"][result["nearest"][0]] * 1000.0
     if result["weak_support"]:
         heatmap_title = (f"NO CLOSE TRAINING DATA — nearest example is {nearest_distance:.1f} mm away\n"
-                         "Train rows are stored joint labels; last rows are this target's model outputs.\n"
-                         "Examples are context only; the MLP predicts from its learned weights.")
+                         "Training rows are reference labels; the MLP predicts from learned weights.\n"
+                         "Joint values: −1 low limit, 0 midpoint, +1 high limit.")
     else:
         heatmap_title = ("Five closest training examples and this target's model outputs\n"
-                         "Train rows are stored joint labels; last rows are this target's raw/clipped output.")
+                         "Training rows are reference labels; last two rows are model output.\n"
+                         "Joint values: −1 low limit, 0 midpoint, +1 high limit.")
     ax_neighbors.set_title(heatmap_title, fontsize=9)
-    ax_neighbors.set_xlabel("Normalized joint value: −1 = low limit, +1 = high limit; raw colors saturate")
-    fig.colorbar(image, ax=ax_neighbors, fraction=0.046, pad=0.03,
-                 label="Joint position\nblue: low, white: middle, red: high")
 
     # Prediction path: target -> network -> clipping -> physical commands -> TCP result.
     ax_flow.axis("off")
@@ -297,16 +305,16 @@ def draw_case(robot, model_name, case, result, train_q, workspace_boundary, outp
         f"{value:+.3f} {unit}" for value, unit in zip(result["command"], units)
     )
     stages = [
-        ("1  REQUEST", "x,y,z = " + ", ".join(f"{v:+.3f}" for v in target) + " m", "#e15759"),
-        ("2  MLP OUTPUT", "raw normalized q = " + ", ".join(f"{v:+.2f}" for v in result["raw"]), "#b07aa1"),
-        ("3  LIMIT CLIP", "normalized q = " + ", ".join(f"{v:+.2f}" for v in result["clipped"]), "#f28e2b"),
-        ("4  MOTOR COMMAND", physical_command, "#4e79a7"),
-        ("5  WEBOTS TCP", "xyz = " + ", ".join(f"{v:+.3f}" for v in actual) + " m", "#59a14f"),
+        ("1  REQUEST", "x,y,z = " + ", ".join(f"{v:+.3f}" for v in target) + " m"),
+        ("2  MLP OUTPUT", "raw normalized q = " + ", ".join(f"{v:+.2f}" for v in result["raw"])),
+        ("3  LIMIT CLIP", "normalized q = " + ", ".join(f"{v:+.2f}" for v in result["clipped"])),
+        ("4  MOTOR COMMAND", physical_command),
+        ("5  WEBOTS TCP", "xyz = " + ", ".join(f"{v:+.3f}" for v in actual) + " m"),
     ]
-    for index, (title, detail, color) in enumerate(stages):
+    for index, (title, detail) in enumerate(stages):
         y = 0.76 - index * 0.15
-        ax_flow.text(0.02, y, title, transform=ax_flow.transAxes, color="white", weight="bold",
-                     bbox=dict(boxstyle="round,pad=0.35", facecolor=color, edgecolor="none"), va="center")
+        ax_flow.text(0.02, y, title, transform=ax_flow.transAxes, color="#333333", weight="bold",
+                     bbox=dict(boxstyle="round,pad=0.3", facecolor="#e6e6e6", edgecolor="#aaaaaa"), va="center")
         ax_flow.text(0.36, y, detail, transform=ax_flow.transAxes, va="center", family="monospace", fontsize=9)
         if index < len(stages) - 1:
             ax_flow.annotate("", xy=(0.20, y - 0.105), xytext=(0.20, y - 0.055),
@@ -326,16 +334,12 @@ def draw_case(robot, model_name, case, result, train_q, workspace_boundary, outp
     fig.suptitle(f"{robot.upper()} MLP diagnostic | {model_name} | {case['label']}",
                  fontsize=12, y=0.99)
     if case["kind"] == "unreachable stress case":
-        banner = "UNREACHABLE STRESS TARGET — outside the modeled joint-limited workspace"
-        banner_color = "#f8d7da"
+        banner = "TARGET STATUS: UNREACHABLE STRESS CASE — outside estimated workspace"
     elif case["kind"] == "held-out reachable":
         banner = "REACHABLE TARGET — held-out sample generated by Webots"
-        banner_color = "#d8f0df"
     else:
         banner = "USER TARGET — workspace membership is not classified"
-        banner_color = "#fff0c2"
-    fig.text(0.5, 0.94, banner, ha="center", va="center", fontsize=10, weight="bold",
-             bbox=dict(boxstyle="round,pad=0.35", facecolor=banner_color, edgecolor="#777777"))
+    fig.text(0.5, 0.94, banner, ha="center", va="center", fontsize=10, weight="bold", color="#333333")
     output.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output, dpi=160)
     plt.close(fig)

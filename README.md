@@ -101,10 +101,10 @@ the simulated arm did with the network's command. Use `--webots` if Webots is
 not found through `PATH` or `WEBOTS_HOME`. Adjust settling with `--settle-time`
 and `--timeout`.
 
-In the joint-label heatmap, blue means a value near the joint's low limit,
-white is the midpoint, and red is near the high limit. These colors encode
-joint values, not confidence. Raw MLP outputs beyond `[-1,1]` use the endpoint
-color; the printed cell value shows the unclipped number.
+The model comparison is a plain table rather than a color scale. Joint values
+are normalized: `-1` is the low joint limit, `0` is the midpoint, and `+1` is
+the high limit. The five training rows are reference examples; the MLP predicts
+from its learned weights, not by selecting one of those rows.
 
 To add arbitrary target points, pass a CSV with columns `robot,label,x,y,z`:
 
