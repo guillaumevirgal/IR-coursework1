@@ -101,10 +101,12 @@ the simulated arm did with the network's command. Use `--webots` if Webots is
 not found through `PATH` or `WEBOTS_HOME`. Adjust settling with `--settle-time`
 and `--timeout`.
 
-The model comparison is a plain table rather than a color scale. Joint values
-are normalized: `-1` is the low joint limit, `0` is the midpoint, and `+1` is
-the high limit. The five training rows are reference examples; the MLP predicts
-from its learned weights, not by selecting one of those rows.
+In the workspace and pose plots, red marks the requested TCP, blue marks the
+Webots TCP, and grey marks the estimated workspace or arm. In the joint-value
+plot only, blue means a joint value near its low limit, white is the midpoint,
+and red is near its high limit. This heatmap color means joint position, not
+confidence; its colorbar labels the scale. The five training rows are reference
+examples; the MLP predicts from learned weights, not by selecting one row.
 
 To add arbitrary target points, pass a CSV with columns `robot,label,x,y,z`:
 
