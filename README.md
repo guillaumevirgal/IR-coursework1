@@ -63,13 +63,10 @@ Both worlds include a reachable target sphere. The controller loads
 `mlp_ned_scara_large_h64x64_cosine` by default; to select another model, add
 `"--model=MODEL_NAME"` to that world's `controllerArgs` list.
 
-While the simulation is running, left-click a green workspace point in the 3D
-view to move the red target sphere there. Green points show positions accepted
-into that arm's NN dataset. The target is not snapped to those points: use the
-keyboard to place it anywhere, including between samples. Use the arrow keys
-for X/Y, Page Up/Page Down for Z, and hold Shift for smaller adjustments.
-Network accuracy is best within the densely sampled region and is not
-guaranteed outside it.
+While the simulation is running, left-click a point in the 3D view to move the
+red target sphere there. Use the arrow keys for X/Y, Page Up/Page Down for Z,
+and hold Shift for smaller adjustments. The target can be moved anywhere;
+network accuracy is not guaranteed outside its trained workspace.
 
 Dataset generation is separate: the master runner starts Webots headlessly and
 temporarily selects `controllers/generate_dataset/generate_dataset.py`. That
