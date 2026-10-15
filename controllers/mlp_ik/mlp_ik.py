@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
-from controller import Supervisor
+from controller import Keyboard, Supervisor
 
 # Webots starts each controller from its own folder.
 ROOT = Path(__file__).resolve().parents[2]
@@ -25,6 +25,8 @@ from scripts.train_mlp import INPUTS, JOINT_LIMITS, MLP, MODELS, OUTPUTS, denorm
 DEFAULT_MODEL = "mlp_ned_scara_large_h64x64_cosine"
 COMMAND_PERIOD = 0.05  # s
 PRINT_PERIOD = 0.5  # s
+TARGET_STEP = 0.002  # m per simulation step; hold a key to keep moving
+TARGET_FINE_STEP = 0.0005  # m per step while Shift is held
 
 ROBOTS = {
     "ned": {
@@ -88,6 +90,33 @@ def position_in_arm_frame(node, arm_node):
     return pose[3], pose[7], pose[11]
 
 
+def move_target_from_keyboard(keyboard, translation_field):
+    """Move the target sphere in world coordinates using the arrow keys."""
+
+    key = keyboard.getKey()
+    if key < 0:
+        return False
+
+    step = TARGET_FINE_STEP if key & Keyboard.SHIFT else TARGET_STEP
+    directions = {
+        Keyboard.LEFT: (0, -step),
+        Keyboard.RIGHT: (0, step),
+        Keyboard.DOWN: (1, -step),
+        Keyboard.UP: (1, step),
+        Keyboard.PAGEDOWN: (2, -step),
+        Keyboard.PAGEUP: (2, step),
+    }
+    movement = directions.get(key & Keyboard.KEY)
+    if movement is None:
+        return False
+
+    axis, amount = movement
+    position = list(translation_field.getSFVec3f())
+    position[axis] += amount
+    translation_field.setSFVec3f(position)
+    return True
+
+
 def main():
     args = parse_args()
     config = ROBOTS[args.robot]
@@ -105,6 +134,11 @@ def main():
     if tcp_node is None:
         print("WARNING: no DEF TCP node, the measured TCP error will not be printed")
 
+    keyboard = Keyboard()
+    keyboard.enable(timestep)
+    print("Move target: arrows change X/Y, Page Up/Down changes Z; hold Shift for finer steps")
+
+    target_translation = target_node.getField("translation")
     motors = [robot.getDevice(name) for name in config["joints"]]
     for motor, value, speed in zip(motors, config["start"], config["speeds"]):
         motor.setVelocity(speed)
@@ -120,6 +154,8 @@ def main():
 
     while robot.step(timestep) != -1:
         now = robot.getTime()
+        if move_target_from_keyboard(keyboard, target_translation):
+            print(f"Target moved to world position: {target_translation.getSFVec3f()}")
 
         if now - last_command >= COMMAND_PERIOD:
             target = position_in_arm_frame(target_node, arm_node)

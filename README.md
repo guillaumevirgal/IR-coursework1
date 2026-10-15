@@ -63,6 +63,11 @@ Both worlds include a reachable target sphere. The controller loads
 `mlp_ned_scara_large_h64x64_cosine` by default; to select another model, add
 `"--model=MODEL_NAME"` to that world's `controllerArgs` list.
 
+While the simulation is running, click the 3D view to give it keyboard focus.
+Use the arrow keys to move the target in X/Y and Page Up/Page Down to change Z.
+Hold Shift for smaller movements. The controller updates the TCP command as
+the target moves; keep the target within the robot's reachable workspace.
+
 Dataset generation is separate: the master runner starts Webots headlessly and
 temporarily selects `controllers/generate_dataset/generate_dataset.py`. That
 entry point supplies the robot-specific joint names, limits, FK function, and
