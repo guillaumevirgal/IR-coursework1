@@ -8,8 +8,8 @@ EXTERNPROTO "../protos/TeachingNed.proto"
 WorldInfo {
 }
 Viewpoint {
-  orientation 0.10517262333063286 0.02475669725953022 -0.9941457766557945 2.6818128601065747
-  position 2.7516931443891672 1.2628321196912256 0.8961155183003242
+  orientation 0.26532340371052315 0.11569365720909815 -0.9571930156060722 2.3507813723854545
+  position 0.7434477953524902 1.152411903418267 0.9654031950812053
 }
 TexturedBackground {
 }
@@ -18,7 +18,7 @@ TexturedBackgroundLight {
 Floor {
 }
 DEF TARGET Pose {
-  translation 0.15 0.25 0.25
+  translation 0.19 0.18 0.3
   children [
     Shape {
       appearance PBRAppearance {
