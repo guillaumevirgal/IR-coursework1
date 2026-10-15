@@ -113,15 +113,23 @@ def extra_points(path, robot):
             for row in read_rows(path) if row["robot"].strip().lower() == robot]
 
 
-def kinematic_workspace_points(robot, resolution=32):
-    """Sample the FK workspace from modeled joint limits and the known floor cut."""
+def kinematic_workspace_boundary(robot, resolution=32):
+    """Sample the joint-limit boundary of the FK workspace with the floor cut."""
     limits = JOINT_LIMITS[robot]
     fk = forward_kinematics_scara if robot == "scara" else forward_kinematics_ned
     axes = [np.linspace(low, high, resolution) for low, high in limits]
-    points = np.asarray([fk((q1, q2, q3))
-                         for q1 in axes[0] for q2 in axes[1] for q3 in axes[2]])
     floor_z = 0.02 if robot == "scara" else 0.14
-    return points[points[:, 2] >= floor_z]
+    points = []
+    for i, q1 in enumerate(axes[0]):
+        for j, q2 in enumerate(axes[1]):
+            for k, q3 in enumerate(axes[2]):
+                on_joint_limit = (i in (0, resolution - 1) or j in (0, resolution - 1)
+                                  or k in (0, resolution - 1))
+                if on_joint_limit:
+                    point = fk((q1, q2, q3))
+                    if point[2] >= floor_z:
+                        points.append(point)
+    return np.asarray(points)
 
 
 def write_cases(path, cases):
@@ -205,42 +213,26 @@ def analyse_point(robot, point, model, mean, std, train_xyz, support_95, measure
             "support_95": support_95}
 
 
-def draw_case(robot, model_name, case, result, train_xyz, train_q, workspace_xyz, output):
-    target, pred, actual = result["target"], result["fk_tcp"], result["webots_tcp"]
-    nearest_xyz = train_xyz[result["nearest"]]
-    rng = np.random.default_rng(42)
-    selection = np.arange(len(train_xyz))
-    if len(selection) > 4000:
-        selection = rng.choice(selection, 4000, replace=False)
-    cloud = train_xyz[selection]
+def draw_case(robot, model_name, case, result, train_q, workspace_boundary, output):
+    target, actual = result["target"], result["webots_tcp"]
     fig = plt.figure(figsize=(15, 9))
     fig.subplots_adjust(left=0.06, right=0.98, top=0.87, bottom=0.08, wspace=0.28, hspace=0.36)
     ax_space = fig.add_subplot(221, projection="3d")
     ax_arm = fig.add_subplot(222, projection="3d")
     ax_neighbors = fig.add_subplot(223)
     ax_flow = fig.add_subplot(224)
-    workspace_rng = np.random.default_rng(17)
-    workspace_selection = np.arange(len(workspace_xyz))
-    if len(workspace_selection) > 14000:
-        workspace_selection = workspace_rng.choice(workspace_selection, 14000, replace=False)
-    reachable_cloud = workspace_xyz[workspace_selection]
-    ax_space.scatter(*reachable_cloud.T, s=3, c="#45a89b", alpha=0.12,
-                     label="joint-limit FK workspace")
-    ax_space.scatter(*cloud.T, s=5, c="#c7d0d8", alpha=0.5, label="training TCPs")
-    ax_space.scatter(*nearest_xyz.T, s=38, c="#4e79a7", label="nearest 5 training TCPs")
+    ax_space.scatter(*workspace_boundary.T, s=7, c="#45a89b", alpha=0.24,
+                     label="estimated workspace boundary")
     ax_space.scatter(*target, marker="x", s=100, c="#e15759", linewidths=3, label="requested TCP")
-    ax_space.scatter(*pred, marker="o", s=55, c="#f28e2b", label="command FK TCP")
     ax_space.scatter(*actual, marker="^", s=65, c="#59a14f", label="measured Webots TCP")
     ax_space.plot([target[0], actual[0]], [target[1], actual[1]], [target[2], actual[2]],
                   color="#e15759", linewidth=2, label="target-to-measured error")
-    ax_space.plot([pred[0], actual[0]], [pred[1], actual[1]], [pred[2], actual[2]],
-                  color="#777777", linestyle=":", linewidth=1.5, label="FK-to-Webots difference")
-    ax_space.set_title("Robot workspace (teal) and sampled training data (grey)")
+    ax_space.set_title("Joint-limited workspace boundary and this target")
     ax_space.set_xlabel("x (m)"); ax_space.set_ylabel("y (m)"); ax_space.set_zlabel("z (m)")
-    ax_space.legend(loc="upper left", fontsize=6.5, ncol=2, framealpha=0.94,
-                    title="Markers and lines", title_fontsize=8)
+    ax_space.legend(loc="upper left", fontsize=7, framealpha=0.94,
+                    title="Workspace and target", title_fontsize=8)
     ax_space.text2D(0.02, 0.02,
-                    "Teal: FK samples within modeled joint limits and floor height. "
+                    "Boundary sampled from FK and joint limits; floor height applied. "
                     "Collision checking is not included.",
                     transform=ax_space.transAxes, fontsize=7,
                     bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.88, edgecolor="#cccccc"))
@@ -384,7 +376,7 @@ def main():
         train_rows = read_rows(DATA / robot / f"train_{args.size}.csv")
         train_xyz = np.array([[float(row[axis]) for axis in "xyz"] for row in train_rows])
         train_q = np.array([[float(row[name]) for name in JOINT_NAMES] for row in train_rows])
-        workspace_xyz = kinematic_workspace_points(robot)
+        workspace_boundary = kinematic_workspace_boundary(robot)
         tree_distances, _ = cKDTree(train_xyz).query(train_xyz, k=2)
         support_95 = float(np.percentile(tree_distances[:, 1], 95))
         measured_by_label = {row["label"]: row for row in measured_rows}
@@ -392,7 +384,7 @@ def main():
             result = analyse_point(robot, case["point"], model, mean, std, train_xyz, support_95,
                                   measured_by_label[case["label"]])
             filename = f"{robot}_{case['label']}.png"
-            draw_case(robot, args.model, case, result, train_xyz, train_q, workspace_xyz,
+            draw_case(robot, args.model, case, result, train_q, workspace_boundary,
                       args.output / filename)
             summary_rows.append({"robot": robot, "label": case["label"], "kind": case["kind"],
                 "x": result["target"][0], "y": result["target"][1], "z": result["target"][2],
