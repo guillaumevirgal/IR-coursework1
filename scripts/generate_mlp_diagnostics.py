@@ -190,10 +190,11 @@ def analyse_point(robot, point, model, mean, std, train_xyz, support_95, measure
             "settled": measured["settled"].lower() == "true",
             "settle_seconds": float(measured["settle_seconds"]),
             "distances": distances, "nearest": nearest,
-            "weak_support": bool(distances[nearest[0]] > support_95)}
+            "weak_support": bool(distances[nearest[0]] > support_95),
+            "support_95": support_95}
 
 
-def draw_case(robot, model_name, case, result, train_xyz, output):
+def draw_case(robot, model_name, case, result, train_xyz, train_q, output):
     target, pred, actual = result["target"], result["fk_tcp"], result["webots_tcp"]
     nearest_xyz = train_xyz[result["nearest"]]
     rng = np.random.default_rng(42)
@@ -205,8 +206,8 @@ def draw_case(robot, model_name, case, result, train_xyz, output):
     fig.subplots_adjust(left=0.06, right=0.98, top=0.89, bottom=0.08, wspace=0.28, hspace=0.36)
     ax_space = fig.add_subplot(221, projection="3d")
     ax_arm = fig.add_subplot(222, projection="3d")
-    ax_flow = fig.add_subplot(223)
-    ax_joints = fig.add_subplot(224)
+    ax_neighbors = fig.add_subplot(223)
+    ax_flow = fig.add_subplot(224)
     ax_space.scatter(*cloud.T, s=5, c="#c7d0d8", alpha=0.32, label="training TCPs")
     ax_space.scatter(*nearest_xyz.T, s=35, c="#4e79a7", label="nearest 5 TCPs")
     ax_space.scatter(*target, marker="x", s=100, c="#e15759", linewidths=3, label="requested TCP")
@@ -242,13 +243,40 @@ def draw_case(robot, model_name, case, result, train_xyz, output):
     ax_arm.legend(loc="upper left", fontsize=8, framealpha=0.92,
                   title="Pose markers", title_fontsize=8)
 
-    # Causal pipeline: each cell shows what changed at that stage.
+    # Show nearby training labels beside the model response. Colors saturate at
+    # normalized joint limits; cell text retains the raw model value.
+    nearest_q = train_q[result["nearest"]]
+    matrix = np.vstack((nearest_q, result["raw"], result["clipped"]))
+    color_matrix = np.clip(matrix, -1.0, 1.0)
+    nearest_labels = [
+        f"Example {i + 1} ({result['distances'][row] * 1000:.1f} mm)"
+        for i, row in enumerate(result["nearest"])
+    ]
+    row_labels = nearest_labels + ["MLP raw output", "After joint-limit clip"]
+    image = ax_neighbors.imshow(color_matrix, cmap="coolwarm", vmin=-1, vmax=1, aspect="auto")
+    for row in range(matrix.shape[0]):
+        for col in range(matrix.shape[1]):
+            color_value = color_matrix[row, col]
+            ink = "white" if abs(color_value) > 0.58 else "black"
+            ax_neighbors.text(col, row, f"{matrix[row, col]:+.2f}", ha="center", va="center",
+                              fontsize=8, color=ink)
+    ax_neighbors.set_yticks(np.arange(len(row_labels)), row_labels)
+    ax_neighbors.set_xticks(np.arange(3), JOINT_NAMES)
+    ax_neighbors.set_title("Nearby training joint labels vs this model's output")
+    ax_neighbors.set_xlabel("Normalized joint value (color scale limited to −1…+1)")
+    fig.colorbar(image, ax=ax_neighbors, fraction=0.046, pad=0.03, label="normalized value")
+
+    # Prediction path: target -> network -> clipping -> physical commands -> TCP result.
     ax_flow.axis("off")
+    units = ("rad", "rad", "m") if robot == "scara" else ("rad", "rad", "rad")
+    physical_command = ", ".join(
+        f"{value:+.3f} {unit}" for value, unit in zip(result["command"], units)
+    )
     stages = [
         ("1  REQUEST", "x,y,z = " + ", ".join(f"{v:+.3f}" for v in target) + " m", "#e15759"),
-        ("2  MLP OUTPUT", "raw q = " + ", ".join(f"{v:+.2f}" for v in result["raw"]), "#b07aa1"),
-        ("3  LIMIT CLIP", "q = " + ", ".join(f"{v:+.2f}" for v in result["clipped"]), "#f28e2b"),
-        ("4  WEBOTS JOINTS", "measured = " + ", ".join(f"{v:+.3f}" for v in q), "#4e79a7"),
+        ("2  MLP OUTPUT", "raw normalized q = " + ", ".join(f"{v:+.2f}" for v in result["raw"]), "#b07aa1"),
+        ("3  LIMIT CLIP", "normalized q = " + ", ".join(f"{v:+.2f}" for v in result["clipped"]), "#f28e2b"),
+        ("4  MOTOR COMMAND", physical_command, "#4e79a7"),
         ("5  WEBOTS TCP", "xyz = " + ", ".join(f"{v:+.3f}" for v in actual) + " m", "#59a14f"),
     ]
     for index, (title, detail, color) in enumerate(stages):
@@ -260,43 +288,18 @@ def draw_case(robot, model_name, case, result, train_xyz, output):
             ax_flow.annotate("", xy=(0.20, y - 0.105), xytext=(0.20, y - 0.055),
                              xycoords=ax_flow.transAxes, arrowprops=dict(arrowstyle="->", color="#666"))
     status = "SETTLED" if result["settled"] else "TIMEOUT: did not settle"
-    support = "weak training support" if result["weak_support"] else "near sampled training data"
-    summary = (f"JOINT TRACKING: {status} in {result['settle_seconds']:.2f} simulated s  |  {support}\n"
-               f"TCP TARGET ERROR (Webots): {result['webots_error_mm']:.1f} mm\n"
-               f"FK estimate error: {result['fk_target_error_mm']:.1f} mm  |  FK/Webots difference: {result['fk_webots_gap_mm']:.2f} mm\n"
-               f"The network predicts joints; it does not test reachability or plan motion."
+    support = (f"nearest example {result['distances'][result['nearest'][0]] * 1000:.1f} mm; "
+               f"95% training spacing {result['support_95'] * 1000:.1f} mm")
+    support += " (weak support)" if result["weak_support"] else ""
+    summary = (f"WEBOTS: {status} in {result['settle_seconds']:.2f} simulated s  |  {support}\n"
+               f"TCP TARGET ERROR: {result['webots_error_mm']:.1f} mm  |  FK estimate error: {result['fk_target_error_mm']:.1f} mm\n"
+               f"FK/Webots difference: {result['fk_webots_gap_mm']:.2f} mm. The network does not test reachability."
                if result["settled"] else
-               f"JOINT TRACKING: {status} after {result['settle_seconds']:.2f} simulated s  |  {support}\n"
+               f"WEBOTS: {status} after {result['settle_seconds']:.2f} simulated s  |  {support}\n"
                f"LAST MEASURED TCP TARGET ERROR (Webots): {result['webots_error_mm']:.1f} mm")
     ax_flow.text(0.02, 0.015, summary, transform=ax_flow.transAxes, fontsize=8.5, va="bottom",
                  bbox=dict(boxstyle="round,pad=0.45", facecolor="#f2f2f2", edgecolor="#cccccc"))
 
-    # Show each command and sensor reading as a fraction of that joint's own range.
-    # This avoids a misleading shared axis for joints with different limits/units.
-    limits = JOINT_LIMITS[robot]
-    y = np.arange(3)[::-1]
-    for i, (lo, hi) in enumerate(limits):
-        command_pct = (result["command"][i] - lo) / (hi - lo) * 100.0
-        measured_pct = (q[i] - lo) / (hi - lo) * 100.0
-        ax_joints.hlines(y[i], 0, 100, color="#c7d0d8", linewidth=9, zorder=1)
-        ax_joints.vlines([0, 100], y[i] - .15, y[i] + .15, color="#555", linewidth=1)
-        ax_joints.scatter(command_pct, y[i], marker="D", s=75, color="#f28e2b", zorder=3,
-                          label="commanded" if i == 0 else None)
-        ax_joints.scatter(measured_pct, y[i], marker="o", s=65, color="#4e79a7", zorder=4,
-                          label="settled sensor" if i == 0 else None)
-        units = "m" if robot == "scara" and i == 2 else "rad"
-        ax_joints.text(0, y[i] - .19, f"{lo:g}", ha="center", va="top", fontsize=7)
-        ax_joints.text(100, y[i] - .19, f"{hi:g}", ha="center", va="top", fontsize=7)
-        ax_joints.text(105, y[i],
-                       f"cmd {result['command'][i]:+.3f} / sensor {q[i]:+.3f} {units}",
-                       ha="left", va="center", fontsize=7.5)
-    ax_joints.set_yticks(y, JOINT_NAMES)
-    ax_joints.set_xlim(-5, 137)
-    ax_joints.set_xticks((0, 50, 100), ("0%", "50%", "100%"))
-    ax_joints.set_xlabel("Position within each joint's own allowed range; endpoint labels give physical limits")
-    ax_joints.set_title("Joint tracking only — this does not mean the TCP reached its target")
-    ax_joints.grid(axis="x", alpha=.25)
-    ax_joints.legend(loc="upper center", fontsize=8, ncol=2)
     fig.suptitle(f"{robot.upper()} end-to-end MLP diagnostic | {model_name} | {case['label']} ({case['kind']})",
                  fontsize=13)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -347,6 +350,7 @@ def main():
         measured_rows = run_webots(robot, args.model, cases, args)
         train_rows = read_rows(DATA / robot / f"train_{args.size}.csv")
         train_xyz = np.array([[float(row[axis]) for axis in "xyz"] for row in train_rows])
+        train_q = np.array([[float(row[name]) for name in JOINT_NAMES] for row in train_rows])
         tree_distances, _ = cKDTree(train_xyz).query(train_xyz, k=2)
         support_95 = float(np.percentile(tree_distances[:, 1], 95))
         measured_by_label = {row["label"]: row for row in measured_rows}
@@ -354,7 +358,8 @@ def main():
             result = analyse_point(robot, case["point"], model, mean, std, train_xyz, support_95,
                                   measured_by_label[case["label"]])
             filename = f"{robot}_{case['label']}.png"
-            draw_case(robot, args.model, case, result, train_xyz, args.output / filename)
+            draw_case(robot, args.model, case, result, train_xyz, train_q,
+                      args.output / filename)
             summary_rows.append({"robot": robot, "label": case["label"], "kind": case["kind"],
                 "x": result["target"][0], "y": result["target"][1], "z": result["target"][2],
                 "nearest_training_distance_m": float(np.min(result["distances"])),
