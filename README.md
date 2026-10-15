@@ -68,9 +68,19 @@ While the simulation is running, use the arrow keys to move the red target
 sphere in X/Y and Page Up/Page Down to change Z. Hold Shift for smaller
 adjustments. Network accuracy is not guaranteed outside its trained workspace.
 
-### Generate headless MLP diagnostics
+### Generate end-to-end MLP diagnostics
 
-Generate a set of static diagnostics without starting Webots:
+The diagnostic runner starts each selected world in headless Webots fast mode.
+It sends targets through the saved MLP, applies joint-limit clipping, commands
+the motors, waits for joint sensors to settle, and records the TCP measured by
+Webots. Webots and the trained model weights (`models/<model>.npz`) are
+required. If the weights are not present, train the default model first:
+
+```bash
+python scripts/train_mlp.py --size large --hidden 64 64
+```
+
+Then run diagnostics:
 
 ```bash
 python scripts/generate_mlp_diagnostics.py
@@ -79,13 +89,14 @@ python scripts/generate_mlp_diagnostics.py --robot scara --samples 4
 
 By default it uses two held-out reachable targets and two deliberately
 unreachable stress points for each robot. It writes one PNG per target and
-`outputs/mlp_diagnostics/summary.csv`. Each figure shows the target relative to
-training examples, the predicted arm pose, raw network outputs, clipping to
-joint limits, and local raw-output sensitivity. The support warning compares
-nearest-example distance with the training set's 95th-percentile
-nearest-neighbour spacing. This measures training-data support, not physical
-reachability. The predicted TCP error uses forward kinematics; the report does
-not simulate motor motion or settling.
+`outputs/mlp_diagnostics/summary.csv`. Figures show training-data context, the
+settled Webots pose, the path from target through raw output and clipping to
+measured joints and TCP, plus target error and settling status. The nearest-data
+warning measures training-data support, not physical reachability. The script
+does not claim that a target is reachable or collision-free; it reports what
+the simulated arm did with the network's command. Use `--webots` if Webots is
+not found through `PATH` or `WEBOTS_HOME`. Adjust settling with `--settle-time`
+and `--timeout`.
 
 To add arbitrary target points, pass a CSV with columns `robot,label,x,y,z`:
 
