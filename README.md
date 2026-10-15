@@ -80,14 +80,14 @@ that reads `DEF TARGET` directly from Webots. Move the target with the arrow
 keys and Page Up/Down (Shift gives finer steps); the dashboard updates with the
 new prediction and the robot's measured TCP as it moves.
 
-The view compares the target and predicted TCP with the training cloud, draws
-the predicted arm pose, shows the five nearest training examples' joint values,
-and plots the MLP's local output sensitivity to X/Y/Z. It also reports
-normalized input/output values and predicted versus measured TCP error. Nearest
-examples provide context; local sensitivity shows how the network output
-changes around the target. Matplotlib must be installed in the Python
-interpreter used by Webots; use `scripts/install_dependencies.py` with that
-interpreter if needed.
+The view explains the result in three steps: distance from the target to the
+training examples, raw MLP outputs and joint-limit clipping, then the resulting
+pose and TCP error. The support warning compares the target's nearest-example
+distance with the training set's 95th-percentile nearest-neighbour spacing; it
+indicates weak training support, not physical unreachability. The dashboard
+also shows five nearby examples and how the raw MLP output responds to small
+X/Y/Z changes. Matplotlib must be installed in the Python interpreter used by
+Webots; use `scripts/install_dependencies.py` with that interpreter if needed.
 
 Dataset generation is separate: the master runner starts Webots headlessly and
 temporarily selects `controllers/generate_dataset/generate_dataset.py`. That
