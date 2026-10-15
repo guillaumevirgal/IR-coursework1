@@ -66,7 +66,11 @@ Both worlds include a reachable target sphere. The controller loads
 While the simulation is running, click the 3D view to give it keyboard focus.
 Use the arrow keys to move the target in X/Y and Page Up/Page Down to change Z.
 Hold Shift for smaller movements. The controller updates the TCP command as
-the target moves; keep the target within the robot's reachable workspace.
+the target moves. Green points show positions accepted into that arm's NN
+dataset, giving a visual guide to the sampled workspace. The target is not
+snapped to those points: the keyboard can place it anywhere, including between
+the green dots. Network accuracy is best within the densely sampled region and
+is not guaranteed outside it.
 
 Dataset generation is separate: the master runner starts Webots headlessly and
 temporarily selects `controllers/generate_dataset/generate_dataset.py`. That

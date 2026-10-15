@@ -6,6 +6,7 @@ joint ranges for that robot.
 """
 
 import argparse
+import csv
 import json
 import math
 import sys
@@ -90,6 +91,50 @@ def position_in_arm_frame(node, arm_node):
     return pose[3], pose[7], pose[11]
 
 
+def add_workspace_marker(robot, arm_node, robot_name):
+    """Draw accepted FK training positions as a green point cloud in Webots."""
+
+    dataset = ROOT / "data" / "nn" / f"{robot_name}_master.csv"
+    points = []
+    with dataset.open(newline="", encoding="utf-8") as source:
+        for row in csv.DictReader(source):
+            x, y, z = (float(row[axis]) for axis in ("x", "y", "z"))
+            points.append((x, y, z))
+
+    if not points:
+        print(f"WARNING: no workspace points found in {dataset}")
+        return
+
+    pose = arm_node.getPose()
+    world_points = []
+    for x, y, z in points:
+        world_points.append(
+            "%.5f %.5f %.5f" % (
+                pose[0] * x + pose[1] * y + pose[2] * z + pose[3],
+                pose[4] * x + pose[5] * y + pose[6] * z + pose[7],
+                pose[8] * x + pose[9] * y + pose[10] * z + pose[11],
+            )
+        )
+
+    marker = """Shape {
+      appearance PBRAppearance {
+        baseColor 0.15 0.9 0.25
+        emissiveColor 0.04 0.2 0.04
+        roughness 1
+        transparency 0.2
+      }
+      geometry PointSet {
+        coord Coordinate {
+          point [
+            %s
+          ]
+        }
+      }
+    }""" % "\n            ".join(world_points)
+    robot.getRoot().getField("children").importMFNodeFromString(-1, marker)
+    print(f"Workspace marker: {len(points)} accepted dataset positions (green points)")
+
+
 def move_target_from_keyboard(keyboard, translation_field):
     """Move the target sphere in world coordinates using the arrow keys."""
 
@@ -133,6 +178,8 @@ def main():
         return
     if tcp_node is None:
         print("WARNING: no DEF TCP node, the measured TCP error will not be printed")
+
+    add_workspace_marker(robot, arm_node, args.robot)
 
     keyboard = Keyboard()
     keyboard.enable(timestep)
