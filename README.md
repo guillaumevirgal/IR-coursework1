@@ -91,7 +91,8 @@ By default it uses two held-out reachable targets and two deliberately
 unreachable stress points for each robot. It writes one PNG per target and
 `outputs/mlp_diagnostics/summary.csv`. Figures separate the sampled FK
 workspace boundary and target/result markers from a focused comparison of the
-five nearest training joint labels with the raw and clipped model outputs.
+five closest training points and the robot's final position, measured in millimetres
+from the requested point.
 They identify known reachable and unreachable stress targets and show the
 Webots TCP error. The workspace estimate does not include collision checking;
 user-specified targets are not classified automatically.
@@ -102,14 +103,14 @@ not found through `PATH` or `WEBOTS_HOME`. Adjust settling with `--settle-time`
 and `--timeout`.
 
 In the workspace and pose plots, red marks the requested TCP, blue marks the
-Webots TCP, and grey marks the estimated workspace or arm. In the joint-value
-plot only, blue means a joint value near its low limit, white is the midpoint,
-and red is near its high limit. This heatmap color means joint position, not
-confidence; its colorbar labels the scale. The five training rows are reference
-examples; the MLP predicts from learned weights, not by selecting one row.
-Each normalized value maps to a fraction of that joint's allowed range as
-`(value + 1) / 2`; for example, `+0.02` is 51% through the range and `-0.98`
-is 1% through it.
+Webots TCP, and grey marks the estimated workspace or arm. The training comparison
+uses green dots for the five closest training points and a blue dot for where the
+robot ended up. The red line at zero is the requested point: dots closer to zero
+are closer to the request. Each dot states its distance in millimetres. A short
+caption explains whether nearby training examples exist, using the training
+set's usual spacing as context. Distance shows familiarity with the target;
+it does not prove physical reachability or explain the model's internal reasoning.
+The model predicts from learned weights rather than selecting a training point.
 
 To add arbitrary target points, pass a CSV with columns `robot,label,x,y,z`:
 

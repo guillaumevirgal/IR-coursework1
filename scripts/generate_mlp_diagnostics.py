@@ -213,10 +213,10 @@ def analyse_point(robot, point, model, mean, std, train_xyz, support_95, measure
             "support_95": support_95}
 
 
-def draw_case(robot, model_name, case, result, train_q, workspace_boundary, output):
+def draw_case(robot, model_name, case, result, workspace_boundary, output):
     target, actual = result["target"], result["webots_tcp"]
     fig = plt.figure(figsize=(15, 9))
-    fig.subplots_adjust(left=0.17, right=0.98, top=0.87, bottom=0.08, wspace=0.28, hspace=0.36)
+    fig.subplots_adjust(left=0.17, right=0.98, top=0.87, bottom=0.16, wspace=0.28, hspace=0.36)
     ax_space = fig.add_subplot(221, projection="3d")
     ax_arm = fig.add_subplot(222, projection="3d")
     ax_neighbors = fig.add_subplot(223)
@@ -257,41 +257,42 @@ def draw_case(robot, model_name, case, result, train_q, workspace_boundary, outp
     ax_arm.legend(loc="upper left", fontsize=8, framealpha=0.92,
                   title="Pose markers", title_fontsize=8)
 
-    # Compare stored labels for the closest input examples with this prediction.
-    # Color shows normalized joint position, not confidence or importance.
-    nearest_q = train_q[result["nearest"]]
-    matrix = np.vstack((nearest_q, result["raw"], result["clipped"]))
-    color_matrix = np.clip(matrix, -1.0, 1.0)
-    nearest_labels = [
-        f"Train {i + 1} ({result['distances'][row] * 1000:.0f} mm)"
-        for i, row in enumerate(result["nearest"])
-    ]
-    row_labels = nearest_labels + ["MLP raw", "After clip"]
-    image = ax_neighbors.imshow(color_matrix, cmap="coolwarm", vmin=-1, vmax=1, aspect="auto")
-    for row in range(matrix.shape[0]):
-        for col in range(matrix.shape[1]):
-            value_for_color = color_matrix[row, col]
-            ink = "white" if abs(value_for_color) > 0.58 else "black"
-            ax_neighbors.text(col, row, f"{matrix[row, col]:+.2f}", ha="center", va="center",
-                              fontsize=8, color=ink)
-    ax_neighbors.set_yticks(np.arange(len(row_labels)), row_labels)
-    ax_neighbors.set_xticks(np.arange(3), ("q1\nnormalized", "q2\nnormalized", "q3\nnormalized"))
-    nearest_distance = result["distances"][result["nearest"][0]] * 1000.0
+    # Compare distances in physical space: zero is the requested target.
+    training_mm = result["distances"][result["nearest"]] * 1000.0
+    distances_mm = np.r_[training_mm, np.linalg.norm(actual - target) * 1000.0]
+    labels = ["Closest training point"] + [
+        f"{rank} closest training point" for rank in ("2nd", "3rd", "4th", "5th")
+    ][:len(training_mm) - 1] + ["Where the robot ended up"]
+    positions = np.arange(len(labels))
+    colors = ["#4c956c"] * len(training_mm) + ["#2878b5"]
+    for y, distance, color in zip(positions, distances_mm, colors):
+        ax_neighbors.plot([0, distance], [y, y], color=color, alpha=0.35, linewidth=3)
+        ax_neighbors.scatter(distance, y, s=80, color=color, zorder=3)
+        ax_neighbors.annotate(f"{distance:.1f} mm away", (distance, y),
+                              xytext=(8, 0), textcoords="offset points",
+                              va="center", fontsize=9)
+    ax_neighbors.axvline(0, color="#e15759", linewidth=2)
+    ax_neighbors.text(0, 1.03, "Requested point", color="#b43c3e",
+                      transform=ax_neighbors.get_xaxis_transform(), fontsize=9)
+    ax_neighbors.set_yticks(positions, labels)
+    ax_neighbors.set_ylim(len(labels) - 0.4, -0.6)
+    ax_neighbors.set_xlim(-max(float(distances_mm.max()), 1.0) * 0.04,
+                          max(float(distances_mm.max()), 1.0) * 1.55)
+    ax_neighbors.set_xlabel("Distance from the requested point (mm) — closer to 0 is closer",
+                            fontsize=9)
+    ax_neighbors.set_title("Has the model seen points near this request?", pad=30, fontsize=11)
+    ax_neighbors.spines[["top", "right", "left"]].set_visible(False)
+    ax_neighbors.tick_params(axis="y", length=0)
+    spacing_mm = result["support_95"] * 1000.0
     if result["weak_support"]:
-        heatmap_title = (f"Nearest examples are far from target: {nearest_distance:.0f} mm away\n"
-                         "Training joint labels, then this target's raw and clipped model outputs.\n"
-                         "−1 = low joint limit, 0 = midpoint, +1 = high joint limit.")
+        takeaway = (f"Even the closest training point is {training_mm[0]:.1f} mm away.\n"
+                    "Few nearby examples: the model must predict beyond nearby training data.")
     else:
-        heatmap_title = ("Five nearest training examples and this target's output\n"
-                         "Training joint labels, then the model's raw and clipped outputs.\n"
-                         "−1 = low joint limit, 0 = midpoint, +1 = high joint limit.")
-    ax_neighbors.set_title(heatmap_title, fontsize=9)
-    ax_neighbors.set_xlabel("Fraction through joint range = (normalized value + 1) / 2; raw colors stop at ±1",
-                            fontsize=8)
-    colorbar = fig.colorbar(image, ax=ax_neighbors, fraction=0.046, pad=0.03)
-    colorbar.set_ticks((-1, 0, 1))
-    colorbar.set_ticklabels(("−1 low limit", "0 midpoint", "+1 high limit"))
-    colorbar.set_label("Joint position")
+        takeaway = (f"The closest training point is {training_mm[0]:.1f} mm away.\n"
+                    "Nearby examples exist; this alone does not guarantee an accurate prediction.")
+    ax_neighbors.text(0, -0.27, takeaway +
+                      f"\nFor context: 95% of training points have a neighbour within {spacing_mm:.1f} mm.",
+                      transform=ax_neighbors.transAxes, va="top", fontsize=8)
 
     # Prediction path: target -> network -> clipping -> physical commands -> TCP result.
     ax_flow.axis("off")
@@ -307,10 +308,10 @@ def draw_case(robot, model_name, case, result, train_q, workspace_boundary, outp
         ("5  WEBOTS TCP", "xyz = " + ", ".join(f"{v:+.3f}" for v in actual) + " m"),
     ]
     for index, (title, detail) in enumerate(stages):
-        y = 0.76 - index * 0.15
+        y = 0.70 - index * 0.14
         ax_flow.text(0.02, y, title, transform=ax_flow.transAxes, color="#333333", weight="bold",
                      bbox=dict(boxstyle="round,pad=0.3", facecolor="#e6e6e6", edgecolor="#aaaaaa"), va="center")
-        ax_flow.text(0.36, y, detail, transform=ax_flow.transAxes, va="center", family="monospace", fontsize=9)
+        ax_flow.text(0.36, y, detail, transform=ax_flow.transAxes, va="center", family="monospace", fontsize=8)
         if index < len(stages) - 1:
             ax_flow.annotate("", xy=(0.20, y - 0.105), xytext=(0.20, y - 0.055),
                              xycoords=ax_flow.transAxes, arrowprops=dict(arrowstyle="->", color="#666"))
@@ -320,8 +321,8 @@ def draw_case(robot, model_name, case, result, train_q, workspace_boundary, outp
     nearest_distance = result["distances"][result["nearest"][0]] * 1000.0
     support_note = " — weak training support" if result["weak_support"] else ""
     summary = (f"WEBOTS {motion_status}  |  TCP target error: {result['webots_error_mm']:.1f} mm\n"
-               f"Training context: nearest example {nearest_distance:.1f} mm away; "
-               f"95th-percentile sample spacing {result['support_95'] * 1000:.1f} mm{support_note}\n"
+               f"Nearest training point: {nearest_distance:.1f} mm away{support_note}\n"
+               f"95th-percentile training spacing: {result['support_95'] * 1000:.1f} mm\n"
                f"FK-to-Webots measurement difference: {result['fk_webots_gap_mm']:.2f} mm")
     ax_flow.text(0.02, 0.99, summary, transform=ax_flow.transAxes, fontsize=8, va="top",
                  bbox=dict(boxstyle="round,pad=0.4", facecolor="#f2f2f2", edgecolor="#cccccc"))
@@ -383,7 +384,6 @@ def main():
         measured_rows = run_webots(robot, args.model, cases, args)
         train_rows = read_rows(DATA / robot / f"train_{args.size}.csv")
         train_xyz = np.array([[float(row[axis]) for axis in "xyz"] for row in train_rows])
-        train_q = np.array([[float(row[name]) for name in JOINT_NAMES] for row in train_rows])
         workspace_boundary = kinematic_workspace_boundary(robot)
         tree_distances, _ = cKDTree(train_xyz).query(train_xyz, k=2)
         support_95 = float(np.percentile(tree_distances[:, 1], 95))
@@ -392,7 +392,7 @@ def main():
             result = analyse_point(robot, case["point"], model, mean, std, train_xyz, support_95,
                                   measured_by_label[case["label"]])
             filename = f"{robot}_{case['label']}.png"
-            draw_case(robot, args.model, case, result, train_q, workspace_boundary,
+            draw_case(robot, args.model, case, result, workspace_boundary,
                       args.output / filename)
             summary_rows.append({"robot": robot, "label": case["label"], "kind": case["kind"],
                 "x": result["target"][0], "y": result["target"][1], "z": result["target"][2],
