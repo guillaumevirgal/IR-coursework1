@@ -89,10 +89,13 @@ python scripts/generate_mlp_diagnostics.py --robot scara --samples 4
 
 By default it uses two held-out reachable targets and two deliberately
 unreachable stress points for each robot. It writes one PNG per target and
-`outputs/mlp_diagnostics/summary.csv`. Figures show training-data context, the
-settled Webots pose, the five nearest examples' joint labels beside the model's
-raw and clipped outputs, and the resulting TCP target error. The nearest-data
-warning measures training-data support, not physical reachability. The script
+`outputs/mlp_diagnostics/summary.csv`. Figures distinguish a sampled FK
+workspace (joint limits and floor-height filter) from the smaller training
+sample, identify whether each target is known reachable or an unreachable
+stress point, compare nearby training joint labels with raw and clipped model
+outputs, and show the Webots TCP error. The workspace estimate does not include
+collision checking; user-specified targets are not classified automatically.
+The nearest-data warning measures training-data support, not physical reachability. The script
 does not claim that a target is reachable or collision-free; it reports what
 the simulated arm did with the network's command. Use `--webots` if Webots is
 not found through `PATH` or `WEBOTS_HOME`. Adjust settling with `--settle-time`
