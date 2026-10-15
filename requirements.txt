@@ -3,3 +3,7 @@ numpy>=1.24,<3
 
 # Plots for FK precision and dataset visualisation.
 matplotlib>=3.7,<4
+
+pandas>=2.0,<3
+scikit-learn>=1.3,<2
+joblib>=1.3,<2
