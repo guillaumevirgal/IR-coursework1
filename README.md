@@ -107,6 +107,9 @@ plot only, blue means a joint value near its low limit, white is the midpoint,
 and red is near its high limit. This heatmap color means joint position, not
 confidence; its colorbar labels the scale. The five training rows are reference
 examples; the MLP predicts from learned weights, not by selecting one row.
+Each normalized value maps to a fraction of that joint's allowed range as
+`(value + 1) / 2`; for example, `+0.02` is 51% through the range and `-0.98`
+is 1% through it.
 
 To add arbitrary target points, pass a CSV with columns `robot,label,x,y,z`:
 

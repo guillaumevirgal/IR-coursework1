@@ -275,16 +275,19 @@ def draw_case(robot, model_name, case, result, train_q, workspace_boundary, outp
             ax_neighbors.text(col, row, f"{matrix[row, col]:+.2f}", ha="center", va="center",
                               fontsize=8, color=ink)
     ax_neighbors.set_yticks(np.arange(len(row_labels)), row_labels)
-    ax_neighbors.set_xticks(np.arange(3), JOINT_NAMES)
+    ax_neighbors.set_xticks(np.arange(3), ("q1\nnormalized", "q2\nnormalized", "q3\nnormalized"))
     nearest_distance = result["distances"][result["nearest"][0]] * 1000.0
     if result["weak_support"]:
         heatmap_title = (f"Nearest examples are far from target: {nearest_distance:.0f} mm away\n"
-                         "Training joint labels, then this target's raw and clipped model outputs.")
+                         "Training joint labels, then this target's raw and clipped model outputs.\n"
+                         "−1 = low joint limit, 0 = midpoint, +1 = high joint limit.")
     else:
         heatmap_title = ("Five nearest training examples and this target's output\n"
-                         "Training joint labels, then the model's raw and clipped outputs.")
+                         "Training joint labels, then the model's raw and clipped outputs.\n"
+                         "−1 = low joint limit, 0 = midpoint, +1 = high joint limit.")
     ax_neighbors.set_title(heatmap_title, fontsize=9)
-    ax_neighbors.set_xlabel("Normalized joint value; numbers are exact, colors saturate at ±1", fontsize=8)
+    ax_neighbors.set_xlabel("Fraction through joint range = (normalized value + 1) / 2; raw colors stop at ±1",
+                            fontsize=8)
     colorbar = fig.colorbar(image, ax=ax_neighbors, fraction=0.046, pad=0.03)
     colorbar.set_ticks((-1, 0, 1))
     colorbar.set_ticklabels(("−1 low limit", "0 midpoint", "+1 high limit"))
