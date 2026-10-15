@@ -216,7 +216,7 @@ def analyse_point(robot, point, model, mean, std, train_xyz, support_95, measure
 def draw_case(robot, model_name, case, result, train_q, workspace_boundary, output):
     target, actual = result["target"], result["webots_tcp"]
     fig = plt.figure(figsize=(15, 9))
-    fig.subplots_adjust(left=0.06, right=0.98, top=0.87, bottom=0.08, wspace=0.28, hspace=0.36)
+    fig.subplots_adjust(left=0.13, right=0.98, top=0.87, bottom=0.08, wspace=0.28, hspace=0.36)
     ax_space = fig.add_subplot(221, projection="3d")
     ax_arm = fig.add_subplot(222, projection="3d")
     ax_neighbors = fig.add_subplot(223)
@@ -258,16 +258,16 @@ def draw_case(robot, model_name, case, result, train_q, workspace_boundary, outp
     ax_arm.legend(loc="upper left", fontsize=8, framealpha=0.92,
                   title="Pose markers", title_fontsize=8)
 
-    # Show nearby training labels beside the model response. Colors saturate at
-    # normalized joint limits; cell text retains the raw model value.
+    # Compare stored labels for the closest input examples with this prediction.
+    # The heat colors saturate at normalized joint limits; text keeps exact values.
     nearest_q = train_q[result["nearest"]]
     matrix = np.vstack((nearest_q, result["raw"], result["clipped"]))
     color_matrix = np.clip(matrix, -1.0, 1.0)
     nearest_labels = [
-        f"Example {i + 1} ({result['distances'][row] * 1000:.1f} mm)"
+        f"Train {i + 1} ({result['distances'][row] * 1000:.1f} mm)"
         for i, row in enumerate(result["nearest"])
     ]
-    row_labels = nearest_labels + ["MLP raw output", "After joint-limit clip"]
+    row_labels = nearest_labels + ["MLP raw", "After clip"]
     image = ax_neighbors.imshow(color_matrix, cmap="coolwarm", vmin=-1, vmax=1, aspect="auto")
     for row in range(matrix.shape[0]):
         for col in range(matrix.shape[1]):
@@ -277,9 +277,18 @@ def draw_case(robot, model_name, case, result, train_q, workspace_boundary, outp
                               fontsize=8, color=ink)
     ax_neighbors.set_yticks(np.arange(len(row_labels)), row_labels)
     ax_neighbors.set_xticks(np.arange(3), JOINT_NAMES)
-    ax_neighbors.set_title("Nearby training joint labels vs this model's output")
-    ax_neighbors.set_xlabel("Normalized joint value (color scale limited to −1…+1)")
-    fig.colorbar(image, ax=ax_neighbors, fraction=0.046, pad=0.03, label="normalized value")
+    nearest_distance = result["distances"][result["nearest"][0]] * 1000.0
+    if result["weak_support"]:
+        heatmap_title = (f"NO CLOSE TRAINING DATA — nearest example is {nearest_distance:.1f} mm away\n"
+                         "Train rows are stored joint labels; last rows are this target's model outputs.\n"
+                         "Examples are context only; the MLP predicts from its learned weights.")
+    else:
+        heatmap_title = ("Five closest training examples and this target's model outputs\n"
+                         "Train rows are stored joint labels; last rows are this target's raw/clipped output.")
+    ax_neighbors.set_title(heatmap_title, fontsize=9)
+    ax_neighbors.set_xlabel("Normalized joint value: −1 = low limit, +1 = high limit; raw colors saturate")
+    fig.colorbar(image, ax=ax_neighbors, fraction=0.046, pad=0.03,
+                 label="Joint position\nblue: low, white: middle, red: high")
 
     # Prediction path: target -> network -> clipping -> physical commands -> TCP result.
     ax_flow.axis("off")

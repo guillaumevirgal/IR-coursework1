@@ -101,6 +101,11 @@ the simulated arm did with the network's command. Use `--webots` if Webots is
 not found through `PATH` or `WEBOTS_HOME`. Adjust settling with `--settle-time`
 and `--timeout`.
 
+In the joint-label heatmap, blue means a value near the joint's low limit,
+white is the midpoint, and red is near the high limit. These colors encode
+joint values, not confidence. Raw MLP outputs beyond `[-1,1]` use the endpoint
+color; the printed cell value shows the unclipped number.
+
 To add arbitrary target points, pass a CSV with columns `robot,label,x,y,z`:
 
 ```bash
