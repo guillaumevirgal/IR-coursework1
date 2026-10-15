@@ -14,13 +14,14 @@ IR-coursework1/
 │   │   └── generate_dataset.py         # Webots dataset-generation entry point
 │   ├── common/
 │   │   ├── arm_controller.py           # Motor movement and TCP measurement
-│   │   └── dataset_generator.py        # Sample, audit, reject, export NN rows
+│   │   ├── dataset_generator.py        # Sample, audit, reject, export NN rows
 │   └── fk_precision/fk_precision.py    # Task 1.C FK check in Webots
 ├── scripts/
 │   ├── run_dataset_generation.py       # Master generation and splitting command
 │   ├── install_dependencies.py          # Install Python packages from requirements.txt
 │   ├── forward_kinematics_ned.py       # Task 1.B Ned FK
 │   ├── forward_kinematics_scara.py     # Task 1.B SCARA FK
+│   ├── generate_mlp_diagnostics.py     # Headless MLP prediction diagnostics
 │   ├── run_fk_precision.sh             # Run Task 1.C for both arms
 │   └── plot_fk_precision.py             # Summarise Task 1.C measurements
 └── data/
@@ -66,6 +67,63 @@ Both worlds include a reachable target sphere. The controller loads
 While the simulation is running, use the arrow keys to move the red target
 sphere in X/Y and Page Up/Page Down to change Z. Hold Shift for smaller
 adjustments. Network accuracy is not guaranteed outside its trained workspace.
+
+### Generate end-to-end MLP diagnostics
+
+The diagnostic runner starts each selected world in headless Webots fast mode.
+It sends targets through the saved MLP, applies joint-limit clipping, commands
+the motors, waits for joint sensors to settle, and records the TCP measured by
+Webots. Webots and the trained model weights (`models/<model>.npz`) are
+required. If the weights are not present, train the default model first:
+
+```bash
+python scripts/train_mlp.py --size large --hidden 64 64
+```
+
+Then run diagnostics:
+
+```bash
+python scripts/generate_mlp_diagnostics.py
+python scripts/generate_mlp_diagnostics.py --robot scara --samples 4
+```
+
+By default it compares two reachable held-out test targets and two deliberately
+unreachable stress points for each robot. Increase `--samples` to include more
+reachable targets; each gets its own diagnostic graph and a clear `REACHABLE TARGET`
+banner, while the unreachable cases are labelled separately. It writes one PNG per target and
+`outputs/mlp_diagnostics/summary.csv`. Figures separate the sampled FK
+workspace boundary and target/result markers from a focused comparison of the
+five closest training points and the robot's final position, measured in millimetres
+from the requested point.
+It also writes a side-by-side overview per robot comparing how close each
+reachable and unreachable target is to its nearest training point:
+`ned_reachable_vs_unreachable.png` and `scara_reachable_vs_unreachable.png`.
+Both panels share one distance scale; the dashed line marks typical spacing
+between training points. Points beyond it have fewer nearby examples.
+They identify known reachable and unreachable stress targets and show the
+Webots TCP error. The workspace estimate does not include collision checking;
+user-specified targets are not classified automatically.
+The nearest-data warning measures training-data support, not physical reachability. The script
+does not claim that a target is reachable or collision-free; it reports what
+the simulated arm did with the network's command. Use `--webots` if Webots is
+not found through `PATH` or `WEBOTS_HOME`. Adjust settling with `--settle-time`
+and `--timeout`.
+
+In the workspace and pose plots, red marks the requested TCP, blue marks the
+Webots TCP, and grey marks the estimated workspace or arm. The training comparison
+uses green dots for the five closest training points and a blue dot for where the
+robot ended up. The red line at zero is the requested point: dots closer to zero
+are closer to the request. Each dot states its distance in millimetres. A short
+caption explains whether nearby training examples exist, using the training
+set's usual spacing as context. Distance shows familiarity with the target;
+it does not prove physical reachability or explain the model's internal reasoning.
+The model predicts from learned weights rather than selecting a training point.
+
+To add arbitrary target points, pass a CSV with columns `robot,label,x,y,z`:
+
+```bash
+python scripts/generate_mlp_diagnostics.py --points-csv points.csv
+```
 
 Dataset generation is separate: the master runner starts Webots headlessly and
 temporarily selects `controllers/generate_dataset/generate_dataset.py`. That
