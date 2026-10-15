@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
-from controller import Keyboard, Mouse, Supervisor
+from controller import Keyboard, Supervisor
 
 # Webots starts each controller from its own folder.
 ROOT = Path(__file__).resolve().parents[2]
@@ -117,14 +117,6 @@ def move_target_from_keyboard(keyboard, translation_field):
     return True
 
 
-def clicked_world_position(mouse_state, previous_left):
-    """Return the picked world point on a new left click, if any."""
-
-    if mouse_state.left and not previous_left:
-        return [mouse_state.x, mouse_state.y, mouse_state.z]
-    return None
-
-
 def main():
     args = parse_args()
     config = ROBOTS[args.robot]
@@ -144,11 +136,7 @@ def main():
 
     keyboard = Keyboard()
     keyboard.enable(timestep)
-    mouse = Mouse()
-    mouse.enable(timestep)
-    mouse.enable3dPosition()
-    print("Left-click a point in the 3D view to move the target; use keys for fine adjustment")
-    print("Keys: arrows change X/Y, Page Up/Down changes Z; hold Shift for finer steps")
+    print("Move target: arrows change X/Y, Page Up/Down changes Z; hold Shift for finer steps")
 
     target_translation = target_node.getField("translation")
     motors = [robot.getDevice(name) for name in config["joints"]]
@@ -163,17 +151,9 @@ def main():
     last_command = last_print = -math.inf
     joints = config["start"]
     target = None
-    previous_left = False
 
     while robot.step(timestep) != -1:
         now = robot.getTime()
-        mouse_state = mouse.getState()
-        clicked_position = clicked_world_position(mouse_state, previous_left)
-        if clicked_position is not None:
-            target_translation.setSFVec3f(clicked_position)
-            print(f"Target moved to clicked position: {clicked_position}")
-        previous_left = mouse_state.left
-
         if move_target_from_keyboard(keyboard, target_translation):
             print(f"Target moved to world position: {target_translation.getSFVec3f()}")
 
