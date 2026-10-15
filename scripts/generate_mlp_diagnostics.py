@@ -207,17 +207,19 @@ def draw_case(robot, model_name, case, result, train_xyz, output):
     ax_arm = fig.add_subplot(222, projection="3d")
     ax_flow = fig.add_subplot(223)
     ax_joints = fig.add_subplot(224)
-    ax_space.scatter(*cloud.T, s=5, c="#c7d0d8", alpha=0.32, label="training targets")
-    ax_space.scatter(*nearest_xyz.T, s=35, c="#4e79a7", label="5 nearest examples")
-    ax_space.scatter(*target, marker="x", s=100, c="#e15759", linewidths=3, label="requested target")
-    ax_space.scatter(*pred, marker="o", s=55, c="#f28e2b", label="FK from command")
-    ax_space.scatter(*actual, marker="^", s=65, c="#59a14f", label="Webots measured TCP")
+    ax_space.scatter(*cloud.T, s=5, c="#c7d0d8", alpha=0.32, label="training TCPs")
+    ax_space.scatter(*nearest_xyz.T, s=35, c="#4e79a7", label="nearest 5 TCPs")
+    ax_space.scatter(*target, marker="x", s=100, c="#e15759", linewidths=3, label="requested TCP")
+    ax_space.scatter(*pred, marker="o", s=55, c="#f28e2b", label="command FK TCP")
+    ax_space.scatter(*actual, marker="^", s=65, c="#59a14f", label="measured Webots TCP")
     ax_space.plot([target[0], actual[0]], [target[1], actual[1]], [target[2], actual[2]],
-                  color="#e15759", linewidth=2, label="actual target error")
+                  color="#e15759", linewidth=2, label="target-to-measured error")
     ax_space.plot([pred[0], actual[0]], [pred[1], actual[1]], [pred[2], actual[2]],
-                  color="#777777", linestyle=":", linewidth=1.5, label="FK/Webots gap")
+                  color="#777777", linestyle=":", linewidth=1.5, label="FK-to-Webots difference")
     ax_space.set_title("Where this request sits in the learned data")
     ax_space.set_xlabel("x (m)"); ax_space.set_ylabel("y (m)"); ax_space.set_zlabel("z (m)")
+    ax_space.legend(loc="upper left", fontsize=7, ncol=2, framealpha=0.92,
+                    title="Markers and lines", title_fontsize=8)
 
     # Draw the arm links by evaluating FK at each measured joint prefix where possible.
     # The endpoint comes directly from Webots, so the figure reflects its settled pose.
@@ -237,6 +239,8 @@ def draw_case(robot, model_name, case, result, train_xyz, output):
     ax_arm.set_box_aspect((1, 1, 1))
     ax_arm.set_title("Arm pose after Webots settles")
     ax_arm.set_xlabel("x (m)"); ax_arm.set_ylabel("y (m)"); ax_arm.set_zlabel("z (m)")
+    ax_arm.legend(loc="upper left", fontsize=8, framealpha=0.92,
+                  title="Pose markers", title_fontsize=8)
 
     # Causal pipeline: each cell shows what changed at that stage.
     ax_flow.axis("off")
