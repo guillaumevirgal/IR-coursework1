@@ -10,20 +10,18 @@ IR-coursework1/
 ├── controllers/
 │   ├── mlp_ik/
 │   │   └── mlp_ik.py                   # Shared neural IK controller for both arms
-│   ├── mlp_ik_diagnostic/
-│   │   └── mlp_ik_diagnostic.py        # Live Webots network explanation controller
 │   ├── generate_dataset/
 │   │   └── generate_dataset.py         # Webots dataset-generation entry point
 │   ├── common/
 │   │   ├── arm_controller.py           # Motor movement and TCP measurement
 │   │   ├── dataset_generator.py        # Sample, audit, reject, export NN rows
-│   │   └── mlp_prediction_dashboard.py  # Live prediction and training-data plots
 │   └── fk_precision/fk_precision.py    # Task 1.C FK check in Webots
 ├── scripts/
 │   ├── run_dataset_generation.py       # Master generation and splitting command
 │   ├── install_dependencies.py          # Install Python packages from requirements.txt
 │   ├── forward_kinematics_ned.py       # Task 1.B Ned FK
 │   ├── forward_kinematics_scara.py     # Task 1.B SCARA FK
+│   ├── generate_mlp_diagnostics.py     # Headless MLP prediction diagnostics
 │   ├── run_fk_precision.sh             # Run Task 1.C for both arms
 │   └── plot_fk_precision.py             # Summarise Task 1.C measurements
 └── data/
@@ -70,24 +68,30 @@ While the simulation is running, use the arrow keys to move the red target
 sphere in X/Y and Page Up/Page Down to change Z. Hold Shift for smaller
 adjustments. Network accuracy is not guaranteed outside its trained workspace.
 
-### Inspect the network live in Webots
+### Generate headless MLP diagnostics
 
-To see why the MLP chooses a pose for the current target, select
-`mlp_ik_diagnostic` as the controller for `DEF ARM` in the Webots world and
-restart the simulation. Keep the existing `ned` or `scara` controller argument.
-The controller drives the robot with the same MLP and opens a live dashboard
-that reads `DEF TARGET` directly from Webots. Move the target with the arrow
-keys and Page Up/Down (Shift gives finer steps); the dashboard updates with the
-new prediction and the robot's measured TCP as it moves.
+Generate a set of static diagnostics without starting Webots:
 
-The view explains the result in three steps: distance from the target to the
-training examples, raw MLP outputs and joint-limit clipping, then the resulting
-pose and TCP error. The support warning compares the target's nearest-example
-distance with the training set's 95th-percentile nearest-neighbour spacing; it
-indicates weak training support, not physical unreachability. The dashboard
-also shows five nearby examples and how the raw MLP output responds to small
-X/Y/Z changes. Matplotlib must be installed in the Python interpreter used by
-Webots; use `scripts/install_dependencies.py` with that interpreter if needed.
+```bash
+python scripts/generate_mlp_diagnostics.py
+python scripts/generate_mlp_diagnostics.py --robot scara --samples 4
+```
+
+By default it uses two held-out reachable targets and two deliberately
+unreachable stress points for each robot. It writes one PNG per target and
+`outputs/mlp_diagnostics/summary.csv`. Each figure shows the target relative to
+training examples, the predicted arm pose, raw network outputs, clipping to
+joint limits, and local raw-output sensitivity. The support warning compares
+nearest-example distance with the training set's 95th-percentile
+nearest-neighbour spacing. This measures training-data support, not physical
+reachability. The predicted TCP error uses forward kinematics; the report does
+not simulate motor motion or settling.
+
+To add arbitrary target points, pass a CSV with columns `robot,label,x,y,z`:
+
+```bash
+python scripts/generate_mlp_diagnostics.py --points-csv points.csv
+```
 
 Dataset generation is separate: the master runner starts Webots headlessly and
 temporarily selects `controllers/generate_dataset/generate_dataset.py`. That
