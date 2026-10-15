@@ -10,11 +10,14 @@ IR-coursework1/
 ├── controllers/
 │   ├── mlp_ik/
 │   │   └── mlp_ik.py                   # Shared neural IK controller for both arms
+│   ├── mlp_ik_diagnostic/
+│   │   └── mlp_ik_diagnostic.py        # Live Webots network explanation controller
 │   ├── generate_dataset/
 │   │   └── generate_dataset.py         # Webots dataset-generation entry point
 │   ├── common/
 │   │   ├── arm_controller.py           # Motor movement and TCP measurement
-│   │   └── dataset_generator.py        # Sample, audit, reject, export NN rows
+│   │   ├── dataset_generator.py        # Sample, audit, reject, export NN rows
+│   │   └── mlp_prediction_dashboard.py  # Live prediction and training-data plots
 │   └── fk_precision/fk_precision.py    # Task 1.C FK check in Webots
 ├── scripts/
 │   ├── run_dataset_generation.py       # Master generation and splitting command
@@ -66,6 +69,25 @@ Both worlds include a reachable target sphere. The controller loads
 While the simulation is running, use the arrow keys to move the red target
 sphere in X/Y and Page Up/Page Down to change Z. Hold Shift for smaller
 adjustments. Network accuracy is not guaranteed outside its trained workspace.
+
+### Inspect the network live in Webots
+
+To see why the MLP chooses a pose for the current target, select
+`mlp_ik_diagnostic` as the controller for `DEF ARM` in the Webots world and
+restart the simulation. Keep the existing `ned` or `scara` controller argument.
+The controller drives the robot with the same MLP and opens a live dashboard
+that reads `DEF TARGET` directly from Webots. Move the target with the arrow
+keys and Page Up/Down (Shift gives finer steps); the dashboard updates with the
+new prediction and the robot's measured TCP as it moves.
+
+The view compares the target and predicted TCP with the training cloud, draws
+the predicted arm pose, shows the five nearest training examples' joint values,
+and plots the MLP's local output sensitivity to X/Y/Z. It also reports
+normalized input/output values and predicted versus measured TCP error. Nearest
+examples provide context; local sensitivity shows how the network output
+changes around the target. Matplotlib must be installed in the Python
+interpreter used by Webots; use `scripts/install_dependencies.py` with that
+interpreter if needed.
 
 Dataset generation is separate: the master runner starts Webots headlessly and
 temporarily selects `controllers/generate_dataset/generate_dataset.py`. That
