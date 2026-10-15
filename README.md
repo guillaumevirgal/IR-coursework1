@@ -87,8 +87,10 @@ python scripts/generate_mlp_diagnostics.py
 python scripts/generate_mlp_diagnostics.py --robot scara --samples 4
 ```
 
-By default it uses two held-out reachable targets and two deliberately
-unreachable stress points for each robot. It writes one PNG per target and
+By default it compares two reachable held-out test targets and two deliberately
+unreachable stress points for each robot. Increase `--samples` to include more
+reachable targets; each gets its own diagnostic graph and a clear `REACHABLE TARGET`
+banner, while the unreachable cases are labelled separately. It writes one PNG per target and
 `outputs/mlp_diagnostics/summary.csv`. Figures separate the sampled FK
 workspace boundary and target/result markers from a focused comparison of the
 five closest training points and the robot's final position, measured in millimetres
