@@ -303,25 +303,24 @@ def draw_case(robot, model_name, case, result, train_xyz, train_q, workspace_xyz
         ("5  WEBOTS TCP", "xyz = " + ", ".join(f"{v:+.3f}" for v in actual) + " m", "#59a14f"),
     ]
     for index, (title, detail, color) in enumerate(stages):
-        y = 0.91 - index * 0.185
+        y = 0.76 - index * 0.15
         ax_flow.text(0.02, y, title, transform=ax_flow.transAxes, color="white", weight="bold",
                      bbox=dict(boxstyle="round,pad=0.35", facecolor=color, edgecolor="none"), va="center")
         ax_flow.text(0.36, y, detail, transform=ax_flow.transAxes, va="center", family="monospace", fontsize=9)
         if index < len(stages) - 1:
             ax_flow.annotate("", xy=(0.20, y - 0.105), xytext=(0.20, y - 0.055),
                              xycoords=ax_flow.transAxes, arrowprops=dict(arrowstyle="->", color="#666"))
-    status = "SETTLED" if result["settled"] else "TIMEOUT: did not settle"
-    support = (f"nearest example {result['distances'][result['nearest'][0]] * 1000:.1f} mm; "
-               f"95% training spacing {result['support_95'] * 1000:.1f} mm")
-    support += " (weak support)" if result["weak_support"] else ""
-    summary = (f"WEBOTS: {status} in {result['settle_seconds']:.2f} simulated s  |  {support}\n"
-               f"TCP TARGET ERROR: {result['webots_error_mm']:.1f} mm  |  FK estimate error: {result['fk_target_error_mm']:.1f} mm\n"
-               f"FK/Webots difference: {result['fk_webots_gap_mm']:.2f} mm. The network does not test reachability."
-               if result["settled"] else
-               f"WEBOTS: {status} after {result['settle_seconds']:.2f} simulated s  |  {support}\n"
-               f"LAST MEASURED TCP TARGET ERROR (Webots): {result['webots_error_mm']:.1f} mm")
-    ax_flow.text(0.02, 0.015, summary, transform=ax_flow.transAxes, fontsize=8.5, va="bottom",
-                 bbox=dict(boxstyle="round,pad=0.45", facecolor="#f2f2f2", edgecolor="#cccccc"))
+    motion_status = (f"settled in {result['settle_seconds']:.2f} simulated s"
+                     if result["settled"] else
+                     f"did not settle within {result['settle_seconds']:.2f} simulated s")
+    nearest_distance = result["distances"][result["nearest"][0]] * 1000.0
+    support_note = " — weak training support" if result["weak_support"] else ""
+    summary = (f"WEBOTS {motion_status}  |  TCP target error: {result['webots_error_mm']:.1f} mm\n"
+               f"Training context: nearest example {nearest_distance:.1f} mm away; "
+               f"95th-percentile sample spacing {result['support_95'] * 1000:.1f} mm{support_note}\n"
+               f"FK-to-Webots measurement difference: {result['fk_webots_gap_mm']:.2f} mm")
+    ax_flow.text(0.02, 0.99, summary, transform=ax_flow.transAxes, fontsize=8, va="top",
+                 bbox=dict(boxstyle="round,pad=0.4", facecolor="#f2f2f2", edgecolor="#cccccc"))
 
     fig.suptitle(f"{robot.upper()} MLP diagnostic | {model_name} | {case['label']}",
                  fontsize=12, y=0.99)
