@@ -261,33 +261,42 @@ def draw_case(robot, model_name, case, result, train_xyz, output):
                              xycoords=ax_flow.transAxes, arrowprops=dict(arrowstyle="->", color="#666"))
     status = "SETTLED" if result["settled"] else "TIMEOUT: did not settle"
     support = "weak training support" if result["weak_support"] else "near sampled training data"
-    summary = (f"{status} in {result['settle_seconds']:.2f} simulated s  |  {support}\n"
-               f"FK-to-target {result['fk_target_error_mm']:.1f} mm  |  Webots-to-target {result['webots_error_mm']:.1f} mm\n"
-               f"FK/Webots measurement gap {result['fk_webots_gap_mm']:.2f} mm\n"
+    summary = (f"JOINT TRACKING: {status} in {result['settle_seconds']:.2f} simulated s  |  {support}\n"
+               f"TCP TARGET ERROR (Webots): {result['webots_error_mm']:.1f} mm\n"
+               f"FK estimate error: {result['fk_target_error_mm']:.1f} mm  |  FK/Webots difference: {result['fk_webots_gap_mm']:.2f} mm\n"
                f"The network predicts joints; it does not test reachability or plan motion."
                if result["settled"] else
-               f"{status} after {result['settle_seconds']:.2f} simulated s  |  {support}\n"
-               f"Last measured TCP target error {result['webots_error_mm']:.1f} mm")
+               f"JOINT TRACKING: {status} after {result['settle_seconds']:.2f} simulated s  |  {support}\n"
+               f"LAST MEASURED TCP TARGET ERROR (Webots): {result['webots_error_mm']:.1f} mm")
     ax_flow.text(0.02, 0.015, summary, transform=ax_flow.transAxes, fontsize=8.5, va="bottom",
                  bbox=dict(boxstyle="round,pad=0.45", facecolor="#f2f2f2", edgecolor="#cccccc"))
 
-    # Position markers on each joint's allowed interval; no bars obscure values.
+    # Show each command and sensor reading as a fraction of that joint's own range.
+    # This avoids a misleading shared axis for joints with different limits/units.
     limits = JOINT_LIMITS[robot]
     y = np.arange(3)[::-1]
     for i, (lo, hi) in enumerate(limits):
-        ax_joints.hlines(y[i], lo, hi, color="#c7d0d8", linewidth=9, zorder=1)
-        ax_joints.vlines([lo, hi], y[i] - .15, y[i] + .15, color="#555", linewidth=1)
-        ax_joints.scatter(result["command"][i], y[i], marker="D", s=75, color="#f28e2b", zorder=3,
+        command_pct = (result["command"][i] - lo) / (hi - lo) * 100.0
+        measured_pct = (q[i] - lo) / (hi - lo) * 100.0
+        ax_joints.hlines(y[i], 0, 100, color="#c7d0d8", linewidth=9, zorder=1)
+        ax_joints.vlines([0, 100], y[i] - .15, y[i] + .15, color="#555", linewidth=1)
+        ax_joints.scatter(command_pct, y[i], marker="D", s=75, color="#f28e2b", zorder=3,
                           label="commanded" if i == 0 else None)
-        ax_joints.scatter(q[i], y[i], marker="o", s=65, color="#4e79a7", zorder=4,
+        ax_joints.scatter(measured_pct, y[i], marker="o", s=65, color="#4e79a7", zorder=4,
                           label="settled sensor" if i == 0 else None)
-        ax_joints.text(lo, y[i] - .26, f"{lo:g}", ha="center", va="top", fontsize=8)
-        ax_joints.text(hi, y[i] - .26, f"{hi:g}", ha="center", va="top", fontsize=8)
+        units = "m" if robot == "scara" and i == 2 else "rad"
+        ax_joints.text(0, y[i] - .19, f"{lo:g}", ha="center", va="top", fontsize=7)
+        ax_joints.text(100, y[i] - .19, f"{hi:g}", ha="center", va="top", fontsize=7)
+        ax_joints.text(105, y[i],
+                       f"cmd {result['command'][i]:+.3f} / sensor {q[i]:+.3f} {units}",
+                       ha="left", va="center", fontsize=7.5)
     ax_joints.set_yticks(y, JOINT_NAMES)
-    ax_joints.set_xlabel("physical joint value (rad; SCARA q3 is metres)")
-    ax_joints.set_title("Command versus settled joint sensors")
+    ax_joints.set_xlim(-5, 137)
+    ax_joints.set_xticks((0, 50, 100), ("0%", "50%", "100%"))
+    ax_joints.set_xlabel("Position within each joint's own allowed range; endpoint labels give physical limits")
+    ax_joints.set_title("Joint tracking only — this does not mean the TCP reached its target")
     ax_joints.grid(axis="x", alpha=.25)
-    ax_joints.legend(loc="upper right", fontsize=8)
+    ax_joints.legend(loc="upper center", fontsize=8, ncol=2)
     fig.suptitle(f"{robot.upper()} end-to-end MLP diagnostic | {model_name} | {case['label']} ({case['kind']})",
                  fontsize=13)
     output.parent.mkdir(parents=True, exist_ok=True)
