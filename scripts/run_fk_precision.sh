@@ -13,8 +13,8 @@ run_world() {
     local tmp="$REPO/worlds/fk_precision_${robot}.wbt"
     trap 'rm -f "$tmp" "$REPO/worlds/.fk_precision_'"$robot"'.wbproj"' RETURN
 
-    # Copy the world and replace its dataset controller with fk_precision.
-    sed -e '/  controller "main"/d' \
+    # Copy the world and replace its default MLP controller with fk_precision.
+    sed -e '/  controller "mlp_ik"/d' \
         -e '/  controllerArgs \[/,+2d' \
         -e "s|^$arm_line|&\n  controller \"fk_precision\"\n  controllerArgs [\"$robot\" \"$SAMPLES\" \"$SEED\"]|" \
         "$REPO/worlds/$world" > "$tmp"

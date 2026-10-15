@@ -37,7 +37,7 @@ Robot {
   supervisor TRUE
 }
 DEF ARM TeachingNed {
-  controller "main"
+  controller "mlp_ik"
   controllerArgs [
     "ned"
   ]
