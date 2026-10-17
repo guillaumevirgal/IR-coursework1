@@ -21,6 +21,8 @@ IR-coursework1/
 │   ├── install_dependencies.py          # Install Python packages from requirements.txt
 │   ├── forward_kinematics_ned.py       # Task 1.B Ned FK
 │   ├── forward_kinematics_scara.py     # Task 1.B SCARA FK
+│   ├── train_mlp.py                    # Shared MLP trainer: joint loss or TCP loss
+│   ├── tcp_loss.py                     # Batched FK and analytical TCP-loss gradients
 │   ├── generate_mlp_diagnostics.py     # Headless MLP prediction diagnostics
 │   ├── run_fk_precision.sh             # Run Task 1.C for both arms
 │   └── plot_fk_precision.py             # Summarise Task 1.C measurements
@@ -67,6 +69,50 @@ Both worlds include a reachable target sphere. The controller loads
 While the simulation is running, use the arrow keys to move the red target
 sphere in X/Y and Page Up/Page Down to change Z. Hold Shift for smaller
 adjustments. Network accuracy is not guaranteed outside its trained workspace.
+
+### Train with joint loss or TCP loss
+
+Both versions share the same NumPy MLP, ReLU layers, linear outputs, Adam,
+input standardisation, dataset splits, seed, batches and learning-rate schedule.
+Use matching arguments to compare the objectives:
+
+```bash
+python scripts/train_mlp.py --size large --hidden 64 64 --loss joints
+python scripts/train_mlp.py --size large --hidden 64 64 --loss tcp
+```
+
+The baseline minimises MSE against normalised joint labels. The TCP version
+clips predictions to joint limits, converts them to physical joints and uses
+the existing robot FK equations to minimise mean squared distance from the
+predicted TCP to the requested dataset position, in m². Analytical Jacobians
+pass that error through FK and joint denormalisation into the same backpropagation.
+It uses TCP targets rather than joint labels for its training objective.
+
+The linear outputs can exceed joint limits. A small penalty pulls them back
+where clipping would otherwise give zero TCP gradient:
+`loss = mean(||FK(denormalise(clip(q))) - target_xyz||²)
++ tcp_limit_weight * mean(||q - clip(q)||²)`.
+`--tcp-limit-weight` defaults to `0.01` m² per squared normalised joint unit;
+it is a constraint penalty, not a joint-label loss. This weight can be tuned
+using validation data. A zero weight removes that restoring gradient.
+
+Each version selects its checkpoint and early stopping using its own validation
+objective; the independent test set is not loaded. The TCP version saves
+`models/mlp_ned_scara_large_h64x64_cosine_tcp.npz`, plus JSON configuration and
+CSV loss history; baseline filenames stay unchanged. The JSON also records
+per-robot validation FK error in millimetres (mean, median, P95, maximum, RMSE).
+Joint MSE and TCP loss have different units and cannot be compared numerically.
+Compare model quality with the same TCP metrics, then verify endpoint accuracy
+using Webots measurements. FK-based training does not guarantee collision-free
+poses or reliable predictions outside the training workspace.
+
+Load the TCP model in either world with
+`"--model=mlp_ned_scara_large_h64x64_cosine_tcp"` in `controllerArgs`, or run
+diagnostics with:
+
+```bash
+python scripts/generate_mlp_diagnostics.py --model mlp_ned_scara_large_h64x64_cosine_tcp
+```
 
 ### Generate end-to-end MLP diagnostics
 
