@@ -1,10 +1,10 @@
 # Evaluation graphs
 
-For test-result graphs, blue is the model trained against joint labels and orange is the model trained to reduce TCP endpoint error. Per-joint plots use dot size for the small, medium, and large datasets. Training-loss plots use a different key: line colour is dataset size, and solid/dashed lines are training/validation.
+For test-result graphs, blue is the model trained against joint labels and orange is the model trained to reduce TCP endpoint error. Per-joint plots use dot size for the small, medium, and large datasets. In the loss graph, line colour shows dataset size; solid lines show training loss each epoch, dashed lines show validation loss each epoch, and a diamond shows the independent test loss once at the checkpoint selected by validation. The test set does not select epochs. The two panels use different objectives and units, so compare curves only within the same panel.
 
 ## Training progress
 
-- [Training and validation MSE/loss](task4a/training_loss.png): conventional loss-versus-epoch curves. The joint-label MSE and TCP objective have different units, so compare curves only within each panel. These curves show training progress; the test RMSE bars below show held-out model performance.
+- [Training, validation and test MSE/loss](task4a/training_loss.png): conventional loss-versus-epoch curves with one held-out test marker for every saved model.
 
 ## Task 4.A — all independent test rows, calculated using FK
 
