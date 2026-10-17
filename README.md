@@ -114,6 +114,22 @@ diagnostics with:
 python scripts/generate_mlp_diagnostics.py --model mlp_ned_scara_large_h64x64_cosine_tcp
 ```
 
+The small/medium joint-loss versus TCP-loss comparison is in
+[reports/tcp_loss_comparison/report.md](reports/tcp_loss_comparison/report.md).
+Saved small and medium checkpoints for both objectives are supplied in `models/`.
+To evaluate these fixed checkpoints on the same independent test sets:
+
+```bash
+python scripts/compare_mlp_losses.py
+```
+
+Add `--include-large-baseline` to also score the supplied existing large
+joint-loss checkpoint (the controller's default model) as a reference.
+
+It writes a comparison figure, CSV metrics and JSON model/data provenance to
+`reports/tcp_loss_comparison/`. These are FK-based endpoint errors in millimetres;
+they do not measure settled Webots execution or establish out-of-workspace accuracy.
+
 ### Generate end-to-end MLP diagnostics
 
 The diagnostic runner starts each selected world in headless Webots fast mode.
