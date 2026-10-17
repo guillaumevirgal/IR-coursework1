@@ -111,12 +111,61 @@ Compare model quality with the same TCP metrics, then verify endpoint accuracy
 using Webots measurements. FK-based training does not guarantee collision-free
 poses or reliable predictions outside the training workspace.
 
-Load the TCP model in either world with
-`"--model=mlp_ned_scara_large_h64x64_cosine_tcp"` in `controllerArgs`, or run
-diagnostics with:
+#### Train and select a TCP-loss checkpoint
+
+Choose the dataset size when training. These commands create the corresponding
+TCP-loss checkpoint; the `_tcp` suffix distinguishes it from the joint-loss
+model trained on the same split:
 
 ```bash
-python scripts/generate_mlp_diagnostics.py --model mlp_ned_scara_large_h64x64_cosine_tcp
+python scripts/train_mlp.py --size small --hidden 64 64 --loss tcp
+python scripts/train_mlp.py --size medium --hidden 64 64 --loss tcp
+python scripts/train_mlp.py --size large --hidden 64 64 --loss tcp
+```
+
+To evaluate only TCP-loss checkpoints, use the same `--losses tcp` selection
+in either coursework evaluation script:
+
+```bash
+python scripts/compare_mlp_losses.py --losses tcp
+python scripts/evaluate_mlp_webots.py --losses tcp
+```
+
+Both evaluate small, medium and large by default. Add `--sizes large` (or
+`--sizes small medium`) to select sizes. The first command evaluates all test
+rows using FK; the second evaluates the first 100 test rows per arm in
+headless Webots.
+
+For live Webots control, keep the controller set to `mlp_ik` in both
+`worlds/articulated.wbt` (Ned) and `worlds/scara.wbt` (SCARA). Add the chosen
+checkpoint as a second controller argument, leaving the robot name first. In
+Webots, select the `ARM` node in the Scene Tree and add the model string to its
+`controllerArgs` field. For the large TCP-loss model, the two worlds should
+have these arguments:
+
+```text
+# worlds/articulated.wbt (Ned)
+controllerArgs [
+  "ned"
+  "--model=mlp_ned_scara_large_h64x64_cosine_tcp"
+]
+
+# worlds/scara.wbt (SCARA)
+controllerArgs [
+  "scara"
+  "--model=mlp_ned_scara_large_h64x64_cosine_tcp"
+]
+```
+
+Save the world and start or reset the simulation to load the selected model.
+For small or medium checkpoints, replace `large` with `small` or `medium`.
+The default, when no `--model` argument is supplied, remains the large
+joint-loss checkpoint.
+
+The Webots-backed diagnostic script accepts the same model name directly:
+
+```bash
+python scripts/generate_mlp_diagnostics.py --robot both --model mlp_ned_scara_large_h64x64_cosine_tcp
 ```
 
 The small/medium joint-loss versus TCP-loss comparison is in
