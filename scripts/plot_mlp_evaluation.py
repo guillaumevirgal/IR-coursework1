@@ -21,7 +21,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
-from matplotlib.ticker import ScalarFormatter, MaxNLocator, FuncFormatter
+from matplotlib.ticker import MaxNLocator, FuncFormatter
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -48,72 +48,88 @@ def save(fig, path, bottom=0.11):
     plt.close(fig)
 
 
-def dot_panel(ax, rows, cases, metric, variants, *, signed=False, factor=1.0, precision=".2f"):
-    lookup = {(r["size"], r["robot"], r["variant"]): r for r in rows}
-    offsets = np.linspace(-0.14, 0.14, len(variants)) if len(variants) > 1 else [0]
-    values_seen = [0.0]
-    for (variant, label, color), offset in zip(variants, offsets):
-        points = []
-        for index, (size, robot) in enumerate(cases):
-            row = lookup.get((size, robot, variant))
-            if row is None:
-                ax.text(0.03, index + offset, f"{'TCP' if variant == 'tcp' else 'Joint'} not evaluated", transform=ax.get_yaxis_transform(),
-                        color=color, va="center", fontsize=8)
-                continue
-            value = float(row[metric]) * factor
-            points.append((value, index + offset))
-            values_seen.append(value)
-        if points:
-            ax.scatter(*np.array(points).T, s=55, color=color, label=label, zorder=3)
-            for value, y in points:
-                ax.annotate(format(value, precision), (value, y), xytext=(6, 0),
-                            textcoords="offset points", va="center", color=color, fontsize=8)
-    lo, hi = min(values_seen), max(values_seen)
-    span = max(hi - lo, 1e-6)
-    ax.set_xlim(lo - span * 0.1 if signed else 0, hi + span * 0.4)
-    if signed:
-        ax.axvline(0, color="#555555", linewidth=1, linestyle="--")
-    ax.set_yticks(range(len(cases)), [f"{s.capitalize()} · {r.upper()}" for s, r in cases])
-    ax.set_ylim(len(cases) - 0.5, -0.5)
-    ax.grid(axis="x", alpha=0.2)
-    ax.xaxis.set_major_locator(MaxNLocator(nbins=4))
-    ax.xaxis.set_major_formatter(FuncFormatter(lambda value, _: f"{value:.3g}"))
-    ax.tick_params(axis="x", labelsize=9)
-    ax.spines[["top", "right"]].set_visible(False)
-
-
 def endpoint_summary(rows, output, task):
-    cases = [(s, r) for s in SIZES for r in ROBOTS if any(v["size"] == s and v["robot"] == r for v in rows)]
     variants = variants_in(rows)
-    fig, axes = plt.subplots(1, 2, figsize=(12, max(5, 0.65 * len(cases) + 1)), sharey=True)
-    for ax, metric, title in zip(axes, ("mean_tcp_mm", "std_tcp_mm"),
-                               ("Mean endpoint error", "Standard deviation of endpoint error")):
-        dot_panel(ax, rows, cases, metric, variants)
-        ax.set_title(title, fontsize=11)
-        ax.set_xlabel("TCP error (mm)")
-    axes[0].legend(loc="lower right", fontsize=8)
+    fig, axes = plt.subplots(2, 2, figsize=(11, 7), squeeze=False)
+    handles = []
+    for i, robot in enumerate(ROBOTS):
+        subset = [r for r in rows if r["robot"] == robot]
+        if not subset:
+            continue
+        sizes = [size for size in SIZES if any(r["size"] == size for r in subset)]
+        positions = np.arange(len(sizes), dtype=float)
+        width = 0.78 / max(len(variants), 1)
+        for j, (metric, title) in enumerate((
+            ("mean_tcp_mm", "Mean endpoint error"),
+            ("std_tcp_mm", "Standard deviation of error"),
+        )):
+            ax = axes[i, j]
+            for variant_index, (variant, label, color) in enumerate(variants):
+                vals = [next((float(r[metric]) for r in subset
+                              if r["size"] == size and r["variant"] == variant), np.nan)
+                        for size in sizes]
+                x = positions + (variant_index - (len(variants) - 1) / 2) * width
+                valid = np.isfinite(vals)
+                bars = ax.bar(x[valid], np.asarray(vals)[valid], width=width * 0.9,
+                              color=color, label=label, zorder=3)
+                if len(bars):
+                    ax.bar_label(bars, fmt="%.2f", padding=2, fontsize=7)
+                    if i == 0 and j == 0:
+                        handles.append(bars)
+            ax.set_title(f"{robot.upper()} · {title}", fontsize=10)
+            ax.set_xticks(positions, [size.capitalize() for size in sizes])
+            ax.set_xlabel("Training dataset size")
+            ax.set_ylabel("TCP error (mm)")
+            ax.grid(axis="y", alpha=0.2)
+            ax.set_axisbelow(True)
+            ax.spines[["top", "right"]].set_visible(False)
     stage = "4.A — calculated with FK" if task == "4a" else "4.B — measured in Webots"
-    fig.suptitle(f"Task {stage}: endpoint accuracy", fontsize=13)
-    sample_note = "All test rows" if task == "4a" else "First 100 test rows per arm; motor timeouts are included"
-    fig.text(0.5, 0.025, sample_note + ". Lower mean = closer to target; lower std = less variation. Missing models are labelled.",
+    fig.suptitle(f"Task {stage}: endpoint error by model", fontsize=13)
+    if handles:
+        fig.legend(handles, [label for _, label, _ in variants], loc="lower center",
+                   bbox_to_anchor=(0.5, 0.04), ncol=len(variants), fontsize=8)
+    sample_note = "All test rows" if task == "4a" else "First 100 test rows per arm; all settled in this run"
+    fig.text(0.5, 0.012, sample_note + ". Lower bars mean smaller error; std shows variation.",
              ha="center", fontsize=8)
-    save(fig, output)
+    save(fig, output, bottom=0.13)
 
 
 def endpoint_rmse(rows, output, task):
     robots = [r for r in ROBOTS if any(row["robot"] == r for row in rows)]
-    fig, axes = plt.subplots(1, len(robots), figsize=(6 * len(robots), 4.5), squeeze=False)
+    fig, axes = plt.subplots(1, len(robots), figsize=(5.5 * len(robots), 4.5), squeeze=False)
+    variants = variants_in(rows)
+    handles = []
     for ax, robot in zip(axes[0], robots):
         subset = [r for r in rows if r["robot"] == robot]
-        cases = [(s, robot) for s in SIZES if any(r["size"] == s for r in subset)]
-        dot_panel(ax, subset, cases, "rmse_tcp_mm", variants_in(rows))
+        sizes = [size for size in SIZES if any(r["size"] == size for r in subset)]
+        positions = np.arange(len(sizes), dtype=float)
+        width = 0.78 / max(len(variants), 1)
+        for variant_index, (variant, label, color) in enumerate(variants):
+            vals = [next((float(r["rmse_tcp_mm"]) for r in subset
+                          if r["size"] == size and r["variant"] == variant), np.nan)
+                    for size in sizes]
+            x = positions + (variant_index - (len(variants) - 1) / 2) * width
+            valid = np.isfinite(vals)
+            bars = ax.bar(x[valid], np.asarray(vals)[valid], width=width * 0.9,
+                          color=color, label=label, zorder=3)
+            if len(bars):
+                ax.bar_label(bars, fmt="%.2f", padding=2, fontsize=8)
+                if ax is axes[0, 0]:
+                    handles.append(bars)
         ax.set_title(robot.upper())
-        ax.set_xlabel("TCP RMSE (mm) — smaller is better")
-    axes[0, 0].legend(loc="lower right", fontsize=8)
-    fig.suptitle(f"Task {'4.A: FK' if task == '4a' else '4.B: Webots'} endpoint RMSE", fontsize=13)
-    fig.text(0.5, 0.025, "RMSE gives larger misses more weight. Units are millimetres, not normalised joint values.",
-             ha="center", fontsize=9)
-    save(fig, output)
+        ax.set_xticks(positions, [size.capitalize() for size in sizes])
+        ax.set_xlabel("Training dataset size")
+        ax.set_ylabel("TCP RMSE (mm)")
+        ax.grid(axis="y", alpha=0.2)
+        ax.set_axisbelow(True)
+        ax.spines[["top", "right"]].set_visible(False)
+    fig.suptitle(f"Task {'4.A: FK' if task == '4a' else '4.B: Webots'} test TCP RMSE", fontsize=13)
+    if handles:
+        fig.legend(handles, [label for _, label, _ in variants], loc="lower center",
+                   bbox_to_anchor=(0.5, 0.04), ncol=len(variants), fontsize=8)
+    fig.text(0.5, 0.012, "Lower bars are better. RMSE gives larger misses more weight.",
+             ha="center", fontsize=8)
+    save(fig, output, bottom=0.13)
 
 
 def joint_statistics(rows, output, metric):
@@ -184,105 +200,83 @@ def joint_statistics(rows, output, metric):
     save(fig, output, bottom=0.2)
 
 
-def accuracy_curves(predictions, output, task):
-    field = "position_error_mm" if task == "4a" else "webots_error_mm"
-    robots = [r for r in ROBOTS if any(row["robot"] == r for row in predictions)]
-    sizes = [s for s in SIZES if any(row["size"] == s for row in predictions)]
-    all_errors = np.array([float(row[field]) for row in predictions])
-    positive = all_errors[all_errors > 0]
-    lo = max(float(positive.min()) / 2, 1e-6) if len(positive) else 0.001
-    hi = max(float(all_errors.max()) * 1.2, lo * 10)
-    fig, axes = plt.subplots(len(sizes), len(robots), figsize=(6 * len(robots), 2.9 * len(sizes) + 1), squeeze=False)
-    for i, size in enumerate(sizes):
-        for j, robot in enumerate(robots):
-            ax = axes[i, j]
-            for variant, label, color in variants_in(predictions):
-                errors = sorted(float(r[field]) for r in predictions if (r["size"], r["robot"], r["variant"]) == (size, robot, variant))
-                if not errors:
-                    ax.text(0.04, 0.9, f"{label}: not evaluated", transform=ax.transAxes,
-                            color=color, fontsize=8, bbox=dict(facecolor="white", edgecolor="none", alpha=0.85))
-                    continue
-                values = np.maximum(errors, lo)
-                ax.step(np.r_[lo, values, hi], np.r_[0, np.arange(1, len(values)+1) / len(values) * 100, 100],
-                        where="post", color=color, linewidth=2, label=label)
-            ax.set_xscale("log")
-            ax.xaxis.set_major_formatter(ScalarFormatter())
-            ax.set_xlim(lo, hi)
-            ax.set_ylim(0, 102)
-            ax.set_title(f"{robot.upper()} · {size}")
-            ax.set_xlabel("Allowed TCP error (mm; log scale)", fontsize=9)
-            ax.set_ylabel("Test points within this error (%)", fontsize=9)
-            ax.grid(alpha=0.2)
-            ax.legend(loc="lower right", fontsize=8)
-    fig.suptitle(f"Task {'4.A: FK' if task == '4a' else '4.B: Webots'}: how many targets are reached accurately?", fontsize=13)
-    fig.text(0.5, 0.02, "Pick an allowed error on the horizontal axis; read the percentage reached within it. Higher is better at the same threshold.",
-             ha="center", fontsize=9)
-    save(fig, output, bottom=0.09)
-
-
-def fk_vs_webots(predictions, output):
-    robots = [r for r in ROBOTS if any(row["robot"] == r for row in predictions)]
-    sizes = [s for s in SIZES if any(row["size"] == s for row in predictions)]
-    fig, axes = plt.subplots(len(sizes), len(robots), figsize=(6 * len(robots), 3 * len(sizes) + 1), squeeze=False)
-    for i, size in enumerate(sizes):
-        for j, robot in enumerate(robots):
-            ax = axes[i, j]
-            limit = 0.001
-            for variant, label, color in variants_in(predictions):
-                rows = [r for r in predictions if (r["size"], r["robot"], r["variant"]) == (size, robot, variant)]
-                if not rows:
-                    ax.text(0.04, 0.9, f"{label}: not evaluated", transform=ax.transAxes,
-                            color=color, fontsize=8, bbox=dict(facecolor="white", edgecolor="none", alpha=0.85))
-                    continue
-                x = [float(r["fk_target_error_mm"]) for r in rows]
-                y = [float(r["webots_error_mm"]) for r in rows]
-                limit = max(limit, max(x), max(y))
-                ax.scatter(x, y, s=14, alpha=0.65, color=color, label=label)
-            limit *= 1.1
-            ax.plot([0, limit], [0, limit], "--", color="#555555", linewidth=1, label="Equal error")
-            ax.set_xlim(0, limit)
-            ax.set_ylim(0, limit)
-            ax.set_title(f"{robot.upper()} · {size}")
-            ax.set_xlabel("FK-calculated TCP error (mm)", fontsize=9)
-            ax.set_ylabel("Webots-measured TCP error (mm)", fontsize=9)
-            ax.grid(alpha=0.2)
-            ax.legend(loc="lower right", fontsize=8)
-    fig.suptitle("Task 4.B: does Webots confirm the FK endpoint error?", fontsize=13)
-    fig.text(0.5, 0.02, "Each dot uses the same target in both calculations. Above the diagonal: Webots error is larger; below: smaller. Same first 100 points.",
+def training_loss_curves(model_dir, output):
+    """Show train/validation convergence; objective families use separate axes."""
+    colors = {"small": "#2878b5", "medium": "#e07a3f", "large": "#4a9b67"}
+    fig, axes = plt.subplots(1, 2, figsize=(11, 4.8), squeeze=False)
+    axes = axes[0]
+    for ax, variant, title, train_key, val_key, ylabel in (
+        (axes[0], "existing_joints", "Joint-label MSE", "train_mse", "val_mse", "MSE (normalised joint units²)"),
+        (axes[1], "tcp", "TCP objective", "train_loss_m2", "val_loss_m2", "Loss (m², includes limit penalty)"),
+    ):
+        plotted = False
+        for size in SIZES:
+            name = f"mlp_ned_scara_{size}_h64x64_cosine"
+            if variant == "tcp":
+                name += "_tcp"
+            history_path = Path(model_dir) / f"{name}_history.csv"
+            if not history_path.is_file():
+                continue
+            with history_path.open(newline="", encoding="utf-8") as source:
+                history = list(csv.DictReader(source))
+            epochs = [int(row["epoch"]) for row in history]
+            train = [max(float(row[train_key]), 1e-12) for row in history]
+            validation = [max(float(row[val_key]), 1e-12) for row in history]
+            ax.plot(epochs, train, color=colors[size], linewidth=1.5, label=f"{size.capitalize()} train")
+            ax.plot(epochs, validation, color=colors[size], linewidth=1.5, linestyle="--",
+                    label=f"{size.capitalize()} validation")
+            plotted = True
+        ax.set_title(title)
+        ax.set_xlabel("Training epoch")
+        ax.set_ylabel(ylabel)
+        ax.set_yscale("log")
+        ax.grid(alpha=0.2, which="both")
+        if plotted:
+            ax.legend(fontsize=7)
+        else:
+            ax.text(0.5, 0.5, "Training histories not found", transform=ax.transAxes, ha="center")
+        ax.spines[["top", "right"]].set_visible(False)
+    fig.suptitle("Training progress: training and validation loss", fontsize=13)
+    fig.text(0.5, 0.025, "Solid lines = training data; dashed lines = validation data. Compare values only within each panel.",
              ha="center", fontsize=8)
-    save(fig, output, bottom=0.09)
+    save(fig, output, bottom=0.1)
 
 
-def plot_task4a(summary, joints, predictions, output):
+def remove_old_extra_graphs(output, filenames):
+    for filename in filenames:
+        (Path(output) / filename).unlink(missing_ok=True)
+
+
+def plot_task4a(summary, joints, predictions, output, model_dir=ROOT / "models"):
     output = Path(output)
     endpoint_summary(summary, output / "comparison.png", "4a")
     endpoint_rmse(summary, output / "tcp_rmse.png", "4a")
     joint_statistics(joints, output / "joint_mean_errors.png", "mean_error")
     joint_statistics(joints, output / "joint_error_std.png", "std_error")
-    accuracy_curves(predictions, output / "tcp_accuracy_curves.png", "4a")
+    training_loss_curves(model_dir, output / "training_loss.png")
+    remove_old_extra_graphs(output, ("tcp_accuracy_curves.png",))
     (output / "graphs.md").write_text("# Task 4.A graphs\n\n"
         "Blue = joint-loss model; orange = TCP-loss model. Missing checkpoints are not zero errors.\n\n"
         "- [Endpoint mean and standard deviation](comparison.png): closer to the target and variation across test points.\n"
         "- [Endpoint RMSE](tcp_rmse.png): gives larger misses more weight.\n"
         "- [Per-joint mean errors](joint_mean_errors.png): colour shows loss type; dot size shows dataset size; signed angular bias; SCARA lift uses squared error.\n"
         "- [Per-joint standard deviations](joint_error_std.png): colour shows loss type; dot size shows dataset size; read with mean bias and do not compare different units.\n"
-        "- [Accuracy curves](tcp_accuracy_curves.png): percentage of test points below each allowed error.\n\n"
+        "- [Training and validation loss curves](training_loss.png): shows learning across epochs; these are not test results.\n\n"
         "All test rows are included. FK positions are calculated, not measured in Webots.\n", encoding="utf-8")
 
 
-def plot_task4b(summary, predictions, output):
+def plot_task4b(summary, predictions, output, model_dir=ROOT / "models"):
     output = Path(output)
     endpoint_summary(summary, output / "comparison.png", "4b")
     endpoint_rmse(summary, output / "tcp_rmse.png", "4b")
-    accuracy_curves(predictions, output / "tcp_accuracy_curves.png", "4b")
-    fk_vs_webots(predictions, output / "fk_vs_webots.png")
+    training_loss_curves(model_dir, output / "training_loss.png")
+    remove_old_extra_graphs(output, ("tcp_accuracy_curves.png", "fk_vs_webots.png"))
     (output / "graphs.md").write_text("# Task 4.B graphs\n\n"
         "Blue = joint-loss model; orange = TCP-loss model. All measured points, including any motor timeouts, count. Check summary.csv for settling status.\n\n"
         "- [Measured endpoint mean and standard deviation](comparison.png).\n"
         "- [Measured endpoint RMSE](tcp_rmse.png).\n"
-        "- [Accuracy curves](tcp_accuracy_curves.png): percentage below each allowed measured error.\n"
-        "- [FK versus measured error](fk_vs_webots.png): paired errors on exactly the same first 100 test points per arm.\n\n"
-        "The diagonal means equal error magnitudes, not identical positions. Do not compare first-100 Webots results directly with an FK full-test average as if they used the same samples.\n", encoding="utf-8")
+        "- [Training and validation loss curves](training_loss.png): included for learning progress; these are not test results.\n\n"
+        "Task 4.B uses the first 100 test points per arm and measures the TCP in Webots.\n", encoding="utf-8")
 
 
 def read_rows(path):
@@ -294,17 +288,18 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--task4a", type=Path, help="existing Task 4.A output folder")
     parser.add_argument("--task4b", type=Path, help="existing Task 4.B output folder")
+    parser.add_argument("--models", type=Path, default=ROOT / "models", help="model folder containing training histories")
     args = parser.parse_args()
     if args.task4a is None and args.task4b is None:
         args.task4a, args.task4b = ROOT / "outputs/task4a", ROOT / "outputs/task4b"
     if args.task4a is not None:
         path = args.task4a
         plot_task4a(read_rows(path / "summary.csv"), read_rows(path / "joint_errors.csv"),
-                    read_rows(path / "predictions.csv"), path)
+                    read_rows(path / "predictions.csv"), path, args.models)
         print(f"Task 4.A graphs saved to {path}")
     if args.task4b is not None:
         path = args.task4b
-        plot_task4b(read_rows(path / "summary.csv"), read_rows(path / "predictions.csv"), path)
+        plot_task4b(read_rows(path / "summary.csv"), read_rows(path / "predictions.csv"), path, args.models)
         print(f"Task 4.B graphs saved to {path}")
 
 

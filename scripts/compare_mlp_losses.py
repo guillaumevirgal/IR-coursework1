@@ -138,7 +138,7 @@ def main():
         "completed_position_summaries": len(rows), "completed_joint_summaries": len(joints),
         "std_ddof": 0, "prediction_policy": "clip normalised joints to [-1,1] before FK and physical joint errors"}
     (args.output / "metrics.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
-    plot_task4a(rows, joints, predictions, args.output)
+    plot_task4a(rows, joints, predictions, args.output, args.model_dir)
     write_task4a_report(args.output, rows, joints, missing)
     with (args.output / "task4a.md").open("a", encoding="utf-8") as destination:
         destination.write("\n[Graphs and how to read them](graphs.md)\n")

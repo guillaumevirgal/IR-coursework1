@@ -204,9 +204,9 @@ contains a `graphs.md` guide explaining them:
 |---|---|
 | Endpoint mean and standard deviation | Measured endpoint mean and standard deviation |
 | Endpoint RMSE | Measured endpoint RMSE |
-| Each joint's signed mean/squared lift error | FK versus measured error on matching targets |
-| Each joint's error standard deviation | Percentage of targets within each error threshold |
-| Percentage of targets within each error threshold | |
+| Each joint's signed mean/squared lift error | |
+| Each joint's error standard deviation | |
+| Training and validation loss over epochs | Training and validation loss over epochs |
 
 To redraw graphs from results already saved, without retraining or running
 Webots again:
@@ -215,11 +215,12 @@ Webots again:
 python scripts/plot_mlp_evaluation.py
 ```
 
-For another run folder, pass `--task4a PATH` and/or `--task4b PATH`. Blue always
-means joint-loss training and orange means TCP-loss training. Unavailable
-models are labelled, not plotted as zero. The accuracy curves use a log error
-axis; at a chosen error threshold, a higher percentage means more accurate
-predictions. Joint means and standard deviations should be read together:
+For another run folder, pass `--task4a PATH` and/or `--task4b PATH`; use
+`--models PATH` if its training histories are in a different folder. In test
+graphs, blue is the joint-label model and orange is the TCP-error model. In the
+loss-over-epochs graph, each panel is a different objective, line colour shows
+dataset size, and dashed lines show validation loss. Compare loss values only
+within a panel. Joint means and standard deviations should be read together:
 signed angular errors can cancel. SCARA lift errors are squared, with plot
 units converted from m² to mm² and explicitly labelled.
 

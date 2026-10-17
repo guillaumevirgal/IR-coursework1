@@ -151,7 +151,7 @@ def main():
         raise
     metadata["execution_complete"] = True
     save_results(args, summary, predictions, metadata)
-    plot_task4b(summary, predictions, args.output)
+    plot_task4b(summary, predictions, args.output, args.model_dir)
     with (args.output / "task4b.md").open("a", encoding="utf-8") as destination:
         destination.write("\n[Graphs and how to read them](graphs.md)\n")
     print(f"Saved Task 4.B results to {args.output}")

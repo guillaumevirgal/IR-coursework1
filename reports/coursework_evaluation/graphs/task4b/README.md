@@ -1,10 +1,9 @@
 # Task 4.B graphs
 
-Blue = joint-loss model; orange = TCP-loss model. All measured points, including any motor timeouts, count. Check summary.csv for settling status.
+Blue = model trained against joint labels; orange = model trained to reduce endpoint error. All 100 measured points per robot are included.
 
 - [Measured endpoint mean and standard deviation](comparison.png).
 - [Measured endpoint RMSE](tcp_rmse.png).
-- [Accuracy curves](tcp_accuracy_curves.png): percentage below each allowed measured error.
-- [FK versus measured error](fk_vs_webots.png): paired errors on exactly the same first 100 test points per arm.
+- [Training and validation loss](../task4a/training_loss.png): loss over training epochs; this is training progress, not test performance.
 
-The diagonal means equal error magnitudes, not identical positions. Do not compare first-100 Webots results directly with an FK full-test average as if they used the same samples.
+These are Webots measurements on the first 100 test points per arm. Mean and standard deviation are in millimetres.
