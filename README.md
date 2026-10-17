@@ -144,9 +144,8 @@ python scripts/evaluate_mlp_webots.py
 ```
 
 Both commands evaluate every available small/medium/large joint-loss and TCP-loss
-checkpoint, without retraining. The large TCP checkpoint is currently missing:
-it is explicitly listed as not evaluated rather than counted as a completed
-model family. It will be included automatically once trained. Use `--losses joints`
+checkpoint, without retraining. All six checkpoints are now available, including
+the large TCP-loss model. Use `--losses joints`
 or `--losses tcp` to evaluate one family, and `--sizes small medium` for selected
 sizes. The existing `--include-large-baseline` argument remains accepted; the
 large joint-loss model is now included by default.

@@ -1,11 +1,11 @@
 # Coursework evaluation verification
 
-Task 4.A and Task 4.B were run on all five saved checkpoints, using the unchanged independent test files and model weights identified in the JSON hashes.
+Task 4.A and Task 4.B were run on all six saved checkpoints, using the unchanged independent test files and model weights identified in the JSON hashes.
 
-- Task 4.A: 10,000 predictions; 10 position-error summaries and 30 physical per-joint summaries.
-- Task 4.B: 1,000 actual Supervisor TCP measurements; first 100 test samples per arm for each checkpoint; all 1,000 settled, with no timeouts.
+- Task 4.A: 12,000 predictions; 12 position-error summaries and 36 physical per-joint summaries.
+- Task 4.B: 1,200 actual Supervisor TCP measurements; first 100 test samples per arm for each checkpoint; all 1,200 settled, with no timeouts.
 - Joint-loss family: all three sizes and both arms evaluated (six position summaries and eighteen joint summaries in Task 4.A).
-- TCP-loss family: small and medium evaluated. Large TCP is not trained, so its two arm evaluations are explicitly missing.
+- TCP-loss family: all three sizes and both arms evaluated (six position summaries and eighteen joint summaries in Task 4.A).
 
 ![Task 4.A mean and standard deviation](task4a_comparison.png)
 
@@ -25,6 +25,8 @@ Task 4.A and Task 4.B were run on all five saved checkpoints, using the unchange
 | medium | tcp | scara | 0.629 ± 0.319 | 100/100 |
 | large | existing_joints | ned | 2.827 ± 2.160 | 100/100 |
 | large | existing_joints | scara | 0.819 ± 0.462 | 100/100 |
+| large | tcp | ned | 1.188 ± 0.490 | 100/100 |
+| large | tcp | scara | 0.380 ± 0.174 | 100/100 |
 
 ## Saved files
 

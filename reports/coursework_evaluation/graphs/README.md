@@ -1,6 +1,6 @@
 # Evaluation graphs
 
-Blue = joint-loss model; orange = TCP-loss model. Large TCP has not been trained and is marked not evaluated. These graphs use the saved, verified predictions; they do not require a new simulation.
+Blue = joint-loss model; orange = TCP-loss model. Dot size distinguishes the small, medium, and large training sets in the per-joint graphs. These figures use the saved test evaluations.
 
 ## Task 4.A — all independent test rows, calculated using FK
 
