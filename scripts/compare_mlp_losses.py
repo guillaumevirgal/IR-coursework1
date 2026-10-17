@@ -6,7 +6,6 @@ fixed checkpoints; it never trains, selects epochs, or tunes on the test set.
 
 import argparse
 import csv
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -26,68 +25,82 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from scripts.train_mlp import INPUTS, OUTPUTS, MLP, position_errors
+from scripts.train_mlp import JOINT_LIMITS, denormalise, FORWARD_KINEMATICS
+from scripts.evaluation_common import (
+    ROOT, SIZES, ROBOTS, digest, model_name, load_test, predict_model,
+    physical_joint_errors, position_statistics, write_csv, select_models, coverage,
+)
 
 
-def digest(path):
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-def evaluate(directory, size, variant, robot):
-    suffix = "_tcp" if variant == "tcp" else ""
-    name = f"mlp_ned_scara_{size}_h64x64_cosine{suffix}"
-    config = json.loads((directory / f"{name}.json").read_text())
-    weights_path = directory / f"{name}.npz"
-    with np.load(weights_path) as stored:
-        model = MLP((len(INPUTS), *config["hidden"], len(OUTPUTS)), np.random.default_rng(0))
-        model.params = {key: stored[key].copy() for key in model.params}
-        mean, std = stored["mean"], stored["std"]
-    path = ROOT / "data/nn/splits" / robot / "test.csv"
-    with path.open(newline="", encoding="utf-8") as source:
-        rows = list(csv.DictReader(source))
-    x = np.array([[float(row[key]) for key in INPUTS] for row in rows])
-    y = np.array([[float(row[key]) for key in OUTPUTS] for row in rows])
-    prediction = model.predict((x - mean) / std)
-    if not np.isfinite(prediction).all():
-        raise ValueError(f"Nonfinite predictions: {name}")
-    errors = position_errors(x, prediction, [robot]) * 1000.0
+def evaluate(directory, size, variant, robot, *, test_root=None, joint_rows=None, predictions=None):
+    """Task 4.A on every test sample; retain optional physical joint details."""
+    path = (test_root or ROOT / "data/nn/splits") / robot / "test.csv"
+    x, y = load_test(path, robot)
+    prediction, config = predict_model(directory, size, variant, robot, x)
+    command = denormalise(np.clip(prediction, -1, 1), JOINT_LIMITS[robot])
+    true_q = denormalise(y, JOINT_LIMITS[robot])
+    fk_positions = np.array([FORWARD_KINEMATICS[robot](q) for q in command])
+    errors = np.linalg.norm(fk_positions - x[:, 2:5], axis=1) * 1000.0
+    joint_errors, units = physical_joint_errors(robot, true_q, command)
     row = {
-        "size": size, "robot": robot, "variant": variant, "samples": len(rows),
-        "mean_tcp_mm": float(errors.mean()), "median_tcp_mm": float(np.median(errors)),
-        "p95_tcp_mm": float(np.percentile(errors, 95)), "max_tcp_mm": float(errors.max()),
-        "rmse_tcp_mm": float(np.sqrt(np.mean(errors ** 2))),
-        "within_5mm_pct": float(np.mean(errors <= 5.0) * 100),
-        "within_10mm_pct": float(np.mean(errors <= 10.0) * 100),
+        "size": size, "robot": robot, "variant": variant, "samples": len(x),
+        **position_statistics(errors),
         "raw_joint_rmse_normalised": float(np.sqrt(np.mean((prediction - y) ** 2))),
         "clipped_joint_rmse_normalised": float(np.sqrt(np.mean((np.clip(prediction, -1, 1) - y) ** 2))),
         "clipped_predictions_pct": float(np.mean(np.any(np.abs(prediction) > 1.0, axis=1)) * 100),
         "best_epoch": config["best_epoch"],
     }
+    if joint_rows is not None:
+        for j, unit in enumerate(units):
+            joint_rows.append({"size": size, "robot": robot, "variant": variant,
+                "joint": f"q{j + 1}", "samples": len(x), "unit": unit,
+                "error_definition": "squared_linear_difference" if unit == "m^2" else "signed_wrapped_angular_difference",
+                "mean_error": float(joint_errors[:, j].mean()),
+                "std_error": float(joint_errors[:, j].std(ddof=0))})
+    if predictions is not None:
+        for i in range(len(x)):
+            predictions.append({"size": size, "robot": robot, "variant": variant, "sample_index": i + 1,
+                **dict(zip(("target_x_m", "target_y_m", "target_z_m"), x[i, 2:5])),
+                **{f"true_q{j+1}_physical": true_q[i, j] for j in range(3)},
+                **{f"raw_q{j+1}_normalised": prediction[i, j] for j in range(3)},
+                **{f"command_q{j+1}_physical": command[i, j] for j in range(3)},
+                **dict(zip(("fk_x_m", "fk_y_m", "fk_z_m"), fk_positions[i])),
+                "position_error_mm": errors[i],
+                **{f"joint{j+1}_coursework_error": joint_errors[i, j] for j in range(3)}})
     provenance = {"size": size, "variant": variant, "robot": robot,
-                  "weights_sha256": digest(weights_path), "test_sha256": digest(path),
-                  "config": config}
+                  "weights_sha256": digest(directory / f"{model_name(size, variant)}.npz"),
+                  "test_sha256": digest(path), "config": config}
     return row, provenance
 
 
 def draw_comparison(rows, output):
-    cases = [(size, robot) for size in ("small", "medium") for robot in ("ned", "scara")]
+    cases = [(size, robot) for size in SIZES for robot in ROBOTS
+             if any(r["size"] == size and r["robot"] == robot for r in rows)]
     lookup = {(r["size"], r["robot"], r["variant"]): r for r in rows}
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5), sharey=True)
-    for ax, metric, title in zip(axes, ("mean_tcp_mm", "p95_tcp_mm"),
-                               ("Average endpoint error", "95% of test points fall within this error")):
+    fig, axes = plt.subplots(1, 2, figsize=(12, max(5, len(cases) * 0.7 + 1)), sharey=True)
+    for ax, metric, title in zip(axes, ("mean_tcp_mm", "std_tcp_mm"),
+                               ("Mean endpoint error", "Standard deviation of endpoint error")):
         largest = 0
         for variant, offset, color, label in (
             ("existing_joints", -0.13, "#2878b5", "Existing model: joint loss"),
             ("tcp", 0.13, "#e07a3f", "New model: TCP loss"),
         ):
-            values = [lookup[(size, robot, variant)][metric] for size, robot in cases]
+            for i, (size, robot) in enumerate(cases):
+                if (size, robot, variant) not in lookup:
+                    ax.text(0.04, i + offset, f"{'TCP' if variant == 'tcp' else 'Joint'}: not evaluated",
+                            transform=ax.get_yaxis_transform(), color=color, va="center", fontsize=8)
+            points = [(i, lookup[(size, robot, variant)][metric]) for i, (size, robot) in enumerate(cases)
+                      if (size, robot, variant) in lookup]
+            if not points:
+                continue
+            positions = np.array([i for i, _ in points]) + offset
+            values = [value for _, value in points]
             largest = max(largest, max(values))
-            positions = np.arange(len(cases)) + offset
             ax.scatter(values, positions, color=color, label=label, s=65)
             for value, position in zip(values, positions):
                 ax.annotate(f"{value:.2f}", (value, position), xytext=(7, 0),
                             textcoords="offset points", va="center", fontsize=9, color=color)
-        ax.set_xlim(0, largest * 1.28)
+        ax.set_xlim(0, max(largest, 0.001) * 1.28)
         ax.set_title(title, fontsize=11)
         ax.set_xlabel("TCP error (mm) — smaller is better")
         ax.set_yticks(np.arange(len(cases)), [f"{s.capitalize()} · {r.upper()}" for s, r in cases])
@@ -96,49 +109,80 @@ def draw_comparison(rows, output):
         ax.spines[["top", "right"]].set_visible(False)
     axes[0].legend(loc="lower right", fontsize=9)
     fig.suptitle("Joint-loss vs TCP-loss training: independent test accuracy", fontsize=13)
-    fig.text(0.5, 0.02, "Same 1,000 test targets per robot. Endpoint errors calculated with FK; not Webots measurements.",
+    fig.text(0.5, 0.02, "All rows in each test.csv. Missing model sizes are listed in metrics.json. FK errors, not Webots measurements.",
              ha="center", fontsize=9)
     fig.tight_layout(rect=(0.01, 0.06, 0.99, 0.93))
     fig.savefig(output, dpi=160)
     plt.close(fig)
 
 
+def write_task4a_report(output, rows, joints, missing):
+    lines = ["# Task 4.A: independent test evaluation", "",
+        "All test samples; saved checkpoints only. TCP positions are calculated with FK after controller-equivalent joint-limit clipping.", "",
+        "Statistics use population standard deviation (`ddof=0`). Angular error is signed `atan2(sin(true-predicted), cos(true-predicted))` in rad. SCARA lift uses the handout's squared displacement error in m². Normalised joint RMSE is additional and does not replace these physical per-joint statistics.", "",
+        "## Position error", "", "| Size | Model | Robot | Samples | Mean (mm) | Std (mm) | RMSE (mm) |",
+        "|---|---|---|---:|---:|---:|---:|"]
+    for row in rows:
+        lines.append(f"| {row['size']} | {row['variant']} | {row['robot']} | {row['samples']} | "
+                     f"{row['mean_tcp_mm']:.4f} | {row['std_tcp_mm']:.4f} | {row['rmse_tcp_mm']:.4f} |")
+    lines += ["", "## Per-joint coursework errors", "", "Signed angular means describe bias; cancellation can make a mean small despite a large standard deviation.", "",
+              "| Size | Model | Robot | Joint | Unit | Mean | Std |", "|---|---|---|---|---|---:|---:|"]
+    for row in joints:
+        lines.append(f"| {row['size']} | {row['variant']} | {row['robot']} | {row['joint']} | {row['unit']} | "
+                     f"{row['mean_error']:.6g} | {row['std_error']:.6g} |")
+    lines += ["", "## Coverage", "", "For a complete model family Task 4.A needs three sizes × two arms: six position summaries and eighteen joint summaries."]
+    if missing:
+        lines += ["", "Unavailable selected checkpoints (not evaluated): " + ", ".join(f"{s}/{v}" for s, v in missing) + "."]
+    lines += ["", "See `predictions.csv` for every network prediction and error, `joint_errors.csv` for per-joint summaries, and `metrics.json` for model/data hashes and model-family coverage. Task 4.B is a separate Webots measurement; these FK results do not replace it.", ""]
+    (output / "task4a.md").write_text("\n".join(lines), encoding="utf-8")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model-dir", type=Path, default=ROOT / "models")
+    parser.add_argument("--test-root", type=Path, default=ROOT / "data/nn/splits")
+    parser.add_argument("--sizes", nargs="+", choices=SIZES, default=list(SIZES))
+    parser.add_argument("--losses", nargs="+", choices=("joints", "tcp"), default=["joints", "tcp"])
     parser.add_argument("--joint-repeat-dir", type=Path,
                         help="optional training root containing <size>/joints/<model> artifacts")
     parser.add_argument("--include-large-baseline", action="store_true",
-                        help="also score the existing large joint-loss model as an unmatched-size reference")
-    parser.add_argument("--output", type=Path, default=ROOT / "reports/tcp_loss_comparison")
+                        help="legacy option: large joint baseline is already included by default")
+    parser.add_argument("--output", type=Path, default=ROOT / "outputs/task4a")
     args = parser.parse_args()
-    rows, provenance = [], []
-    for size in ("small", "medium"):
-        variants = [("existing_joints", args.model_dir), ("tcp", args.model_dir)]
-        if args.joint_repeat_dir is not None:
-            variants.append(("joint_repeat", args.joint_repeat_dir / size / "joints"))
-        for variant, directory in variants:
-            for robot in ("ned", "scara"):
-                row, source = evaluate(directory, size, variant, robot)
-                rows.append(row)
-                provenance.append(source)
-                print(f"{size:6s} {robot:5s} {variant:16s}: mean {row['mean_tcp_mm']:.3f} mm; "
-                      f"P95 {row['p95_tcp_mm']:.3f} mm; max {row['max_tcp_mm']:.3f} mm")
-    if args.include_large_baseline:
-        for robot in ("ned", "scara"):
-            row, source = evaluate(args.model_dir, "large", "existing_joints", robot)
+    available, missing = select_models(args.model_dir, args.sizes, args.losses)
+    if args.include_large_baseline and ("large", "existing_joints") not in available:
+        extra, _ = select_models(args.model_dir, ["large"], ["joints"])
+        available.extend(extra)
+    for size, variant in missing:
+        print(f"NOT EVALUATED: missing checkpoint {model_name(size, variant)}; recorded in coverage")
+    rows, provenance, joints, predictions = [], [], [], []
+    runs = [(size, variant, args.model_dir) for size, variant in available]
+    if args.joint_repeat_dir is not None:
+        for size in args.sizes:
+            directory = args.joint_repeat_dir / size / "joints"
+            if (directory / f"{model_name(size, 'joint_repeat')}.npz").is_file():
+                runs.append((size, "joint_repeat", directory))
+    for size, variant, directory in runs:
+        for robot in ROBOTS:
+            row, source = evaluate(directory, size, variant, robot, test_root=args.test_root,
+                                   joint_rows=joints, predictions=predictions)
             rows.append(row)
             provenance.append(source)
-            print(f"large  {robot:5s} existing_joints : mean {row['mean_tcp_mm']:.3f} mm; "
-                  f"P95 {row['p95_tcp_mm']:.3f} mm; max {row['max_tcp_mm']:.3f} mm")
+            print(f"{size:6s} {robot:5s} {variant:16s}: mean ± std "
+                  f"{row['mean_tcp_mm']:.3f} ± {row['std_tcp_mm']:.3f} mm; RMSE {row['rmse_tcp_mm']:.3f} mm")
     args.output.mkdir(parents=True, exist_ok=True)
-    with (args.output / "summary.csv").open("w", newline="", encoding="utf-8") as destination:
-        writer = csv.DictWriter(destination, fieldnames=list(rows[0]), lineterminator="\n")
-        writer.writeheader()
-        writer.writerows(rows)
-    (args.output / "metrics.json").write_text(json.dumps({"metrics": rows, "provenance": provenance}, indent=2) + "\n")
+    write_csv(args.output / "summary.csv", rows)
+    write_csv(args.output / "joint_errors.csv", joints)
+    write_csv(args.output / "predictions.csv", predictions)
+    metadata = {"task": "4.A", "metrics": rows, "joint_metrics": joints, "provenance": provenance,
+        "missing_models": [{"size": s, "variant": v} for s, v in missing],
+        "coursework_coverage": coverage(available, args.losses),
+        "completed_position_summaries": len(rows), "completed_joint_summaries": len(joints),
+        "std_ddof": 0, "prediction_policy": "clip normalised joints to [-1,1] before FK and physical joint errors"}
+    (args.output / "metrics.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
     draw_comparison(rows, args.output / "comparison.png")
-    print(f"Saved comparison to {args.output}")
+    write_task4a_report(args.output, rows, joints, missing)
+    print(f"Saved Task 4.A results to {args.output}")
 
 
 if __name__ == "__main__":

@@ -22,6 +22,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("robot", choices=tuple(ROBOTS))
     parser.add_argument("--model", required=True)
+    parser.add_argument("--model-dir", type=Path, default=ROOT / "models")
     parser.add_argument("--points", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--settle-time", type=float, default=0.25)
@@ -29,13 +30,14 @@ def parse_args():
     return parser.parse_args()
 
 
-def load_model(name, robot):
-    weights_path = ROOT / "models" / f"{name}.npz"
+def load_model(name, robot, model_dir=None):
+    model_dir = model_dir or ROOT / "models"
+    weights_path = model_dir / f"{name}.npz"
     if not weights_path.is_file():
         raise FileNotFoundError(
             f"Missing model weights {weights_path}; run scripts/train_mlp.py first"
         )
-    with (ROOT / "models" / f"{name}.json").open(encoding="utf-8") as source:
+    with (model_dir / f"{name}.json").open(encoding="utf-8") as source:
         config = json.load(source)
     if robot not in config["robots"]:
         raise ValueError(f"Model {name} was not trained on {robot}")
@@ -51,7 +53,9 @@ def main():
     args = parse_args()
     robot_cfg = ROBOTS[args.robot]
     fk = forward_kinematics_scara if args.robot == "scara" else forward_kinematics_ned
-    model, mean, std = load_model(args.model, args.robot)
+    if not 0 < args.settle_time <= args.timeout or not math.isfinite(args.timeout):
+        raise ValueError("Require 0 < settle-time <= finite timeout")
+    model, mean, std = load_model(args.model, args.robot, args.model_dir)
     sim = Supervisor()
     timestep = int(sim.getBasicTimeStep())
     arm = sim.getSelf()
@@ -70,7 +74,8 @@ def main():
         motor = sim.getDevice(name)
         motor.setVelocity(min(speed, motor.getMaxVelocity()))
         motor.setPosition(value)
-    sim.step(timestep)
+    if sim.step(timestep) == -1:
+        raise RuntimeError("Simulation ended before evaluation started")
 
     fields = ["robot", "label", "kind", "x", "y", "z", "raw_q1", "raw_q2", "raw_q3",
               "command_q1", "command_q2", "command_q3", "measured_q1", "measured_q2",
@@ -95,9 +100,12 @@ def main():
             start = sim.getTime()
             stable = 0.0
             settled = False
-            while sim.step(timestep) != -1:
+            while True:
+                if sim.step(timestep) == -1:
+                    raise RuntimeError(f"Simulation ended before measuring {row['label']}")
                 errors = [abs(sensor.getValue() - value) for sensor, value in zip(sensors, command)]
-                if all(error <= 1e-3 for error in errors):
+                tolerances = (1e-3, 1e-3, 1e-4 if args.robot == "scara" else 1e-3)
+                if all(error <= tolerance for error, tolerance in zip(errors, tolerances)):
                     stable += timestep / 1000.0
                 else:
                     stable = 0.0

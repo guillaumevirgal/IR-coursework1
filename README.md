@@ -23,6 +23,10 @@ IR-coursework1/
 │   ├── forward_kinematics_scara.py     # Task 1.B SCARA FK
 │   ├── train_mlp.py                    # Shared MLP trainer: joint loss or TCP loss
 │   ├── tcp_loss.py                     # Batched FK and analytical TCP-loss gradients
+│   ├── compare_mlp_losses.py           # Task 4.A: full independent-test evaluation
+│   ├── evaluate_mlp_webots.py          # Task 4.B: first 100 test points in Webots
+│   ├── evaluation_common.py            # Shared test loading and coursework metrics
+│   ├── webots_mlp_runner.py            # Shared temporary worlds and Webots launch
 │   ├── generate_mlp_diagnostics.py     # Headless MLP prediction diagnostics
 │   ├── run_fk_precision.sh             # Run Task 1.C for both arms
 │   └── plot_fk_precision.py             # Summarise Task 1.C measurements
@@ -126,9 +130,72 @@ python scripts/compare_mlp_losses.py
 Add `--include-large-baseline` to also score the supplied existing large
 joint-loss checkpoint (the controller's default model) as a reference.
 
-It writes a comparison figure, CSV metrics and JSON model/data provenance to
-`reports/tcp_loss_comparison/`. These are FK-based endpoint errors in millimetres;
-they do not measure settled Webots execution or establish out-of-workspace accuracy.
+It writes the current Task 4.A results to `outputs/task4a/`. The older comparison
+in `reports/tcp_loss_comparison/` remains a saved experiment snapshot.
+
+### Coursework evaluation: Tasks 4.A and 4.B
+
+Run from the repository root after installing dependencies:
+
+```bash
+python scripts/compare_mlp_losses.py
+python scripts/evaluate_mlp_webots.py
+```
+
+Both commands evaluate every available small/medium/large joint-loss and TCP-loss
+checkpoint, without retraining. The large TCP checkpoint is currently missing:
+it is explicitly listed as not evaluated rather than counted as a completed
+model family. It will be included automatically once trained. Use `--losses joints`
+or `--losses tcp` to evaluate one family, and `--sizes small medium` for selected
+sizes. The existing `--include-large-baseline` argument remains accepted; the
+large joint-loss model is now included by default.
+
+**Task 4.A** reads every row of each arm's independent `test.csv`. It saves:
+
+- `outputs/task4a/summary.csv`: position-error mean, standard deviation and RMSE
+  in millimetres, plus additional comparison metrics.
+- `joint_errors.csv`: mean and standard deviation for each active joint in
+  physical units, using the handout's signed wrapped angular difference (rad)
+  and squared prismatic displacement error (m² for SCARA lift).
+- `predictions.csv`: every requested point, true joints, raw network prediction,
+  clipped physical command, FK endpoint and errors, identified by test row.
+- `metrics.json`, `task4a.md`, `comparison.png`: provenance, coverage and summaries.
+
+**Task 4.B** launches headless Webots and uses exactly the **first 100 rows** of
+each original test file, in file order. It uses the existing `diagnose_mlp`
+controller to command predicted joints, wait until sensors remain within tolerance
+for 0.25 simulated seconds, and read the TCP with the Supervisor. It creates
+temporary worlds; you do not need to change a world's controller manually.
+Outputs under `outputs/task4b/` include:
+
+- `test_sets/ned_test_first100.csv` and `scara_test_first100.csv`: the reduced tests.
+- `summary.csv`: measured TCP-error mean and standard deviation per model/arm,
+  settling/timeout counts and FK statistics on the same 100 points for comparison.
+- `predictions.csv`: every command, joint sensor reading, measured TCP and error.
+- `metrics.json` and `task4b.md`: model/test hashes, run status and coverage.
+
+Statistics use population standard deviation (`ddof=0`). Task 4.B includes all
+100 measured samples even when some do not settle; timeouts are reported and
+not silently discarded. Incomplete or wrong-model measurements are rejected.
+FK coordinates never replace a missing Supervisor measurement. Each complete
+family requires six position summaries in each task and eighteen per-joint
+summaries in Task 4.A (three sizes × two arms × three joints).
+
+On Windows, Webots is located automatically when possible. Otherwise pass its
+launcher explicitly, for example:
+
+```powershell
+python scripts/evaluate_mlp_webots.py --webots "C:\Program Files\Webots\msys64\mingw64\bin\webots.exe"
+```
+
+Use `--output PATH` for a separate run folder. Both scripts also accept
+`--model-dir PATH` and `--test-root PATH`; the latter contains `ned/test.csv`
+and `scara/test.csv`. Only evaluate on samples not used to train those models.
+Task 4.A FK results do not measure physical execution or establish accuracy
+outside the training workspace.
+
+A verified run of both tasks, including the measured Webots statistics, is
+saved in [reports/coursework_evaluation](reports/coursework_evaluation/README.md).
 
 ### Generate end-to-end MLP diagnostics
 
