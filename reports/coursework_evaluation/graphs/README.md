@@ -1,6 +1,6 @@
 # Evaluation graphs
 
-For test-result graphs, blue is the model trained against joint labels and orange is the model trained to reduce TCP endpoint error. Per-joint plots use dot size for the small, medium, and large datasets. In the loss graph, line colour shows dataset size; solid lines show training loss each epoch, dashed lines show validation loss each epoch, and a diamond shows the independent test loss once at the checkpoint selected by validation. The test set does not select epochs. The two panels use different objectives and units, so compare curves only within the same panel.
+For test-result graphs, blue is the model trained against joint labels and orange is the model trained to reduce TCP endpoint error. Per-joint plots use dot size for the small, medium, and large datasets. The loss graph has one row per dataset size and one column per objective. Blue lines show training loss, orange lines show validation loss, and green diamonds show independent test loss once at the checkpoint selected by validation. The curves are 25-epoch moving averages to make their trends readable. The test set does not select epochs. Compare values only within the same objective column.
 
 ## Training progress
 

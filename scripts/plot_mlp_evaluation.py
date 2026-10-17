@@ -222,62 +222,66 @@ def heldout_objective(model_dir, size, variant):
     return float(np.mean((prediction - y) ** 2))
 
 
+def smooth_curve(values, window=25):
+    """Centered moving average to make noisy epoch histories readable."""
+    values = np.asarray(values, dtype=float)
+    window = min(window, len(values) if len(values) % 2 else max(1, len(values) - 1))
+    if window <= 1:
+        return values
+    padded = np.pad(values, (window // 2, window // 2), mode="edge")
+    return np.lib.stride_tricks.sliding_window_view(padded, window).mean(axis=-1)
+
+
 def training_loss_curves(model_dir, output):
-    """Show train/validation curves and one held-out test score per checkpoint."""
-    colors = {"small": "#2878b5", "medium": "#e07a3f", "large": "#4a9b67"}
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5.5), squeeze=False)
-    axes = axes[0]
-    for ax, variant, title, train_key, val_key, ylabel in (
-        (axes[0], "existing_joints", "Joint-label MSE", "train_mse", "val_mse", "MSE (normalised joint units²)"),
-        (axes[1], "tcp", "TCP objective", "train_loss_m2", "val_loss_m2", "Loss (m², includes limit penalty)"),
-    ):
-        plotted = False
-        for size in SIZES:
+    """Show smoothed train/validation curves and one held-out test score per checkpoint."""
+    split_colors = {"train": "#2878b5", "validation": "#e07a3f", "test": "#4a9b67"}
+    fig, axes = plt.subplots(3, 2, figsize=(12, 10), squeeze=False)
+    objectives = (
+        ("existing_joints", "Joint-label MSE", "train_mse", "val_mse", "MSE (normalised joint units²)"),
+        ("tcp", "TCP objective", "train_loss_m2", "val_loss_m2", "Loss (m², includes limit penalty)"),
+    )
+    for row, size in enumerate(SIZES):
+        for column, (variant, objective_title, train_key, val_key, ylabel) in enumerate(objectives):
+            ax = axes[row, column]
             name = model_name(size, variant)
             history_path = Path(model_dir) / f"{name}_history.csv"
             config_path = Path(model_dir) / f"{name}.json"
             if not history_path.is_file() or not config_path.is_file():
+                ax.text(0.5, 0.5, "Model history not found", transform=ax.transAxes, ha="center")
                 continue
             with history_path.open(newline="", encoding="utf-8") as source:
                 history = list(csv.DictReader(source))
             epochs = [int(row["epoch"]) for row in history]
             train = [max(float(row[train_key]), 1e-12) for row in history]
             validation = [max(float(row[val_key]), 1e-12) for row in history]
-            ax.plot(epochs, train, color=colors[size], linewidth=1.8, alpha=0.9)
-            ax.plot(epochs, validation, color=colors[size], linewidth=1.8, linestyle="--", alpha=0.9)
+            ax.plot(epochs, smooth_curve(train), color=split_colors["train"], linewidth=2.0)
+            ax.plot(epochs, smooth_curve(validation), color=split_colors["validation"], linewidth=2.0)
             config = json.loads(config_path.read_text(encoding="utf-8"))
             best_epoch = int(config["best_epoch"])
             test_value = max(heldout_objective(model_dir, size, variant), 1e-12)
             ax.scatter([best_epoch], [test_value], marker="D", s=62,
-                       facecolor=colors[size], edgecolor="#202020", linewidth=0.9,
+                       facecolor=split_colors["test"], edgecolor="#202020", linewidth=0.9,
                        zorder=5, clip_on=False)
-            plotted = True
-        ax.set_title(title)
-        ax.set_xlabel("Training epoch")
-        ax.set_ylabel(ylabel)
-        ax.set_yscale("log")
-        ax.grid(alpha=0.2, which="both")
-        if not plotted:
-            ax.text(0.5, 0.5, "Training histories not found", transform=ax.transAxes, ha="center")
-        ax.spines[["top", "right"]].set_visible(False)
-    fig.suptitle("Loss on training, validation and held-out test data", fontsize=14)
-    size_handles = [Line2D([0], [0], color=colors[size], linewidth=2.5,
-                           label=f"{size.capitalize()} dataset") for size in SIZES]
+            ax.set_title(f"{size.capitalize()} dataset · {objective_title}")
+            ax.set_xlabel("Training epoch")
+            ax.set_ylabel(ylabel)
+            ax.set_yscale("log")
+            ax.grid(alpha=0.2, which="both")
+            ax.spines[["top", "right"]].set_visible(False)
+    fig.suptitle("Training, validation and held-out test loss", fontsize=14)
     split_handles = [
-        Line2D([0], [0], color="#444444", linewidth=2, linestyle="-", label="Training set (each epoch)"),
-        Line2D([0], [0], color="#444444", linewidth=2, linestyle="--", label="Validation set (each epoch)"),
-        Line2D([0], [0], marker="D", linestyle="none", markerfacecolor="white",
-               markeredgecolor="#202020", markersize=7, label="Test set (once at best validation epoch)"),
+        Line2D([0], [0], color=split_colors["train"], linewidth=2.4, label="Training · 25-epoch moving average"),
+        Line2D([0], [0], color=split_colors["validation"], linewidth=2.4, label="Validation · 25-epoch moving average"),
+        Line2D([0], [0], marker="D", linestyle="none", markerfacecolor=split_colors["test"],
+               markeredgecolor="#202020", markersize=7,
+               label="Test set · once at best validation epoch"),
     ]
-    fig.legend(handles=size_handles, loc="lower center", bbox_to_anchor=(0.30, 0.045),
-               ncol=3, fontsize=8, title="Line/marker colour = training dataset size", title_fontsize=8)
-    fig.legend(handles=split_handles, loc="lower center", bbox_to_anchor=(0.73, 0.045),
-               ncol=1, fontsize=8, title="Line / marker shape = data split", title_fontsize=8)
-    fig.text(0.5, 0.012,
-             "Each diamond is the saved model's score on the independent test set at its best-validation checkpoint. "
-             "Test data do not select epochs. Compare values only within each panel.",
-             ha="center", fontsize=8)
-    save(fig, output, bottom=0.25)
+    fig.legend(handles=split_handles, loc="lower center", bbox_to_anchor=(0.5, 0.035),
+               ncol=3, fontsize=8, title="Colour = data split", title_fontsize=8)
+    fig.text(0.5, 0.008,
+             "Each row is a dataset size; compare values only within the same objective column. "
+             "Test data do not select the saved checkpoint.", ha="center", fontsize=8)
+    save(fig, output, bottom=0.12)
 
 
 def remove_old_extra_graphs(output, filenames):
@@ -299,7 +303,7 @@ def plot_task4a(summary, joints, predictions, output, model_dir=ROOT / "models")
         "- [Endpoint RMSE](tcp_rmse.png): gives larger misses more weight.\n"
         "- [Per-joint mean errors](joint_mean_errors.png): colour shows loss type; dot size shows dataset size; signed angular bias; SCARA lift uses squared error.\n"
         "- [Per-joint standard deviations](joint_error_std.png): colour shows loss type; dot size shows dataset size; read with mean bias and do not compare different units.\n"
-        "- [Training, validation and test loss](training_loss.png): lines show each epoch; the test diamond is evaluated once at the checkpoint selected by validation.\n\n"
+        "- [Training, validation and test loss](training_loss.png): blue/orange lines show the 25-epoch moving average of training/validation loss; green diamonds show independent test loss once at the checkpoint selected by validation. Rows identify dataset size.\n\n"
         "All test rows are included. FK positions are calculated, not measured in Webots.\n", encoding="utf-8")
 
 
@@ -313,7 +317,7 @@ def plot_task4b(summary, predictions, output, model_dir=ROOT / "models"):
         "Blue = joint-loss model; orange = TCP-loss model. All measured points, including any motor timeouts, count. Check summary.csv for settling status.\n\n"
         "- [Measured endpoint mean and standard deviation](comparison.png).\n"
         "- [Measured endpoint RMSE](tcp_rmse.png).\n"
-        "- [Training, validation and test loss](training_loss.png): lines show each epoch; the test diamond is evaluated once at the checkpoint selected by validation.\n\n"
+        "- [Training, validation and test loss](training_loss.png): blue/orange lines show the 25-epoch moving average of training/validation loss; green diamonds show independent test loss once at the checkpoint selected by validation. Rows identify dataset size.\n\n"
         "Task 4.B uses the first 100 test points per arm and measures the TCP in Webots.\n", encoding="utf-8")
 
 
