@@ -25,6 +25,7 @@ IR-coursework1/
 │   ├── tcp_loss.py                     # Batched FK and analytical TCP-loss gradients
 │   ├── compare_mlp_losses.py           # Task 4.A: full independent-test evaluation
 │   ├── evaluate_mlp_webots.py          # Task 4.B: first 100 test points in Webots
+│   ├── plot_mlp_evaluation.py          # Graph both evaluations from saved results
 │   ├── evaluation_common.py            # Shared test loading and coursework metrics
 │   ├── webots_mlp_runner.py            # Shared temporary worlds and Webots launch
 │   ├── generate_mlp_diagnostics.py     # Headless MLP prediction diagnostics
@@ -196,6 +197,35 @@ outside the training workspace.
 
 A verified run of both tasks, including the measured Webots statistics, is
 saved in [reports/coursework_evaluation](reports/coursework_evaluation/README.md).
+
+Both evaluation commands now create graphs automatically. Each output folder
+contains a `graphs.md` guide explaining them:
+
+| Task 4.A: all test points, FK | Task 4.B: first 100, measured in Webots |
+|---|---|
+| Endpoint mean and standard deviation | Measured endpoint mean and standard deviation |
+| Endpoint RMSE | Measured endpoint RMSE |
+| Each joint's signed mean/squared lift error | FK versus measured error on matching targets |
+| Each joint's error standard deviation | Percentage of targets within each error threshold |
+| Percentage of targets within each error threshold | |
+
+To redraw graphs from results already saved, without retraining or running
+Webots again:
+
+```bash
+python scripts/plot_mlp_evaluation.py
+```
+
+For another run folder, pass `--task4a PATH` and/or `--task4b PATH`. Blue always
+means joint-loss training and orange means TCP-loss training. Unavailable
+models are labelled, not plotted as zero. The accuracy curves use a log error
+axis; at a chosen error threshold, a higher percentage means more accurate
+predictions. Joint means and standard deviations should be read together:
+signed angular errors can cancel. SCARA lift errors are squared, with plot
+units converted from m² to mm² and explicitly labelled.
+
+The saved [graph gallery](reports/coursework_evaluation/graphs/README.md)
+includes figures generated from the verified evaluation run.
 
 ### Generate end-to-end MLP diagnostics
 

@@ -21,6 +21,7 @@ from scripts.evaluation_common import (
 )
 from scripts.train_mlp import JOINT_LIMITS, denormalise
 from scripts.webots_mlp_runner import run_webots
+from scripts.plot_mlp_evaluation import plot_task4b
 
 
 def first_100(test_root, robot):
@@ -150,6 +151,9 @@ def main():
         raise
     metadata["execution_complete"] = True
     save_results(args, summary, predictions, metadata)
+    plot_task4b(summary, predictions, args.output)
+    with (args.output / "task4b.md").open("a", encoding="utf-8") as destination:
+        destination.write("\n[Graphs and how to read them](graphs.md)\n")
     print(f"Saved Task 4.B results to {args.output}")
 
 

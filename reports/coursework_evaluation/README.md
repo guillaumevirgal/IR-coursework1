@@ -9,6 +9,8 @@ Task 4.A and Task 4.B were run on all five saved checkpoints, using the unchange
 
 ![Task 4.A mean and standard deviation](task4a_comparison.png)
 
+[Graph gallery for both evaluations](graphs/README.md)
+
 ## Task 4.B measured position errors
 
 | Size | Objective | Robot | Mean ± std (mm) | Settled |

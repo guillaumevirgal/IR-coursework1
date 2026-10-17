@@ -1,11 +1,10 @@
 """Evaluate saved joint-loss and TCP-loss MLPs on the same independent tests.
 
-Run after training both sizes with scripts/train_mlp.py. This script evaluates
+Run after training the desired sizes with scripts/train_mlp.py. This script evaluates
 fixed checkpoints; it never trains, selects epochs, or tunes on the test set.
 """
 
 import argparse
-import csv
 import json
 import os
 from pathlib import Path
@@ -17,14 +16,11 @@ os.environ.setdefault("XDG_CACHE_HOME", str(Path(tempfile.gettempdir()) / "ir_co
 Path(os.environ["MPLCONFIGDIR"]).mkdir(parents=True, exist_ok=True)
 Path(os.environ["XDG_CACHE_HOME"]).mkdir(parents=True, exist_ok=True)
 
-import matplotlib
-
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+from scripts.plot_mlp_evaluation import endpoint_summary, plot_task4a
 from scripts.train_mlp import JOINT_LIMITS, denormalise, FORWARD_KINEMATICS
 from scripts.evaluation_common import (
     ROOT, SIZES, ROBOTS, digest, model_name, load_test, predict_model,
@@ -74,46 +70,8 @@ def evaluate(directory, size, variant, robot, *, test_root=None, joint_rows=None
 
 
 def draw_comparison(rows, output):
-    cases = [(size, robot) for size in SIZES for robot in ROBOTS
-             if any(r["size"] == size and r["robot"] == robot for r in rows)]
-    lookup = {(r["size"], r["robot"], r["variant"]): r for r in rows}
-    fig, axes = plt.subplots(1, 2, figsize=(12, max(5, len(cases) * 0.7 + 1)), sharey=True)
-    for ax, metric, title in zip(axes, ("mean_tcp_mm", "std_tcp_mm"),
-                               ("Mean endpoint error", "Standard deviation of endpoint error")):
-        largest = 0
-        for variant, offset, color, label in (
-            ("existing_joints", -0.13, "#2878b5", "Existing model: joint loss"),
-            ("tcp", 0.13, "#e07a3f", "New model: TCP loss"),
-        ):
-            for i, (size, robot) in enumerate(cases):
-                if (size, robot, variant) not in lookup:
-                    ax.text(0.04, i + offset, f"{'TCP' if variant == 'tcp' else 'Joint'}: not evaluated",
-                            transform=ax.get_yaxis_transform(), color=color, va="center", fontsize=8)
-            points = [(i, lookup[(size, robot, variant)][metric]) for i, (size, robot) in enumerate(cases)
-                      if (size, robot, variant) in lookup]
-            if not points:
-                continue
-            positions = np.array([i for i, _ in points]) + offset
-            values = [value for _, value in points]
-            largest = max(largest, max(values))
-            ax.scatter(values, positions, color=color, label=label, s=65)
-            for value, position in zip(values, positions):
-                ax.annotate(f"{value:.2f}", (value, position), xytext=(7, 0),
-                            textcoords="offset points", va="center", fontsize=9, color=color)
-        ax.set_xlim(0, max(largest, 0.001) * 1.28)
-        ax.set_title(title, fontsize=11)
-        ax.set_xlabel("TCP error (mm) — smaller is better")
-        ax.set_yticks(np.arange(len(cases)), [f"{s.capitalize()} · {r.upper()}" for s, r in cases])
-        ax.set_ylim(len(cases) - 0.5, -0.5)
-        ax.grid(axis="x", alpha=0.2)
-        ax.spines[["top", "right"]].set_visible(False)
-    axes[0].legend(loc="lower right", fontsize=9)
-    fig.suptitle("Joint-loss vs TCP-loss training: independent test accuracy", fontsize=13)
-    fig.text(0.5, 0.02, "All rows in each test.csv. Missing model sizes are listed in metrics.json. FK errors, not Webots measurements.",
-             ha="center", fontsize=9)
-    fig.tight_layout(rect=(0.01, 0.06, 0.99, 0.93))
-    fig.savefig(output, dpi=160)
-    plt.close(fig)
+    """Backward-compatible entry point for the endpoint overview."""
+    endpoint_summary(rows, output, "4a")
 
 
 def write_task4a_report(output, rows, joints, missing):
@@ -180,8 +138,10 @@ def main():
         "completed_position_summaries": len(rows), "completed_joint_summaries": len(joints),
         "std_ddof": 0, "prediction_policy": "clip normalised joints to [-1,1] before FK and physical joint errors"}
     (args.output / "metrics.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
-    draw_comparison(rows, args.output / "comparison.png")
+    plot_task4a(rows, joints, predictions, args.output)
     write_task4a_report(args.output, rows, joints, missing)
+    with (args.output / "task4a.md").open("a", encoding="utf-8") as destination:
+        destination.write("\n[Graphs and how to read them](graphs.md)\n")
     print(f"Saved Task 4.A results to {args.output}")
 
 
