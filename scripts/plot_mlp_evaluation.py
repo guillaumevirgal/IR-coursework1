@@ -120,29 +120,59 @@ def joint_statistics(rows, output, metric):
     fig, axes = plt.subplots(len(robots), 3, figsize=(15, 3.5 * len(robots)), squeeze=False)
     names = {"ned": ("waist", "shoulder", "elbow"), "scara": ("base", "elbow", "lift")}
     variants = variants_in(rows)
+    # Give every plotted result its own labelled row. This makes the model size
+    # and training loss explicit beside each value instead of relying on a
+    # colour plus a separate size row to decode the dots.
+    cases = [(size, variant) for size in SIZES for variant, _, _ in variants]
     for i, robot in enumerate(robots):
         for j in range(3):
             ax = axes[i, j]
             subset = [r for r in rows if r["robot"] == robot and r["joint"] == f"q{j+1}"]
-            cases = [(s, robot) for s in SIZES if any(r["size"] == s for r in subset)]
             lift = robot == "scara" and j == 2
-            dot_panel(ax, subset, cases, metric, variants, signed=metric == "mean_error" and not lift,
-                      factor=1e6 if lift else 1, precision=".3g")
-            ax.set_yticks(range(len(cases)), [size.capitalize() for size, _ in cases])
+            lookup = {(r["size"], r["variant"]): r for r in subset}
+            values_seen = [0.0]
+            for row_index, (size, variant) in enumerate(cases):
+                model = lookup.get((size, variant))
+                color = next(color for key, _, color in variants if key == variant)
+                if model is None:
+                    ax.text(0.02, row_index, "not evaluated", transform=ax.get_yaxis_transform(),
+                            color=color, va="center", fontsize=8)
+                    continue
+                value = float(model[metric]) * (1e6 if lift else 1)
+                values_seen.append(value)
+                ax.scatter([value], [row_index], s=48, color=color, zorder=3)
+                ax.annotate(f"{value:.3g}", (value, row_index), xytext=(6, 0),
+                            textcoords="offset points", va="center", color=color, fontsize=8)
+            lo, hi = min(values_seen), max(values_seen)
+            span = max(hi - lo, 1e-6)
+            ax.set_xlim(lo - span * 0.1 if metric == "mean_error" and not lift else 0,
+                        hi + span * 0.45)
+            if metric == "mean_error" and not lift:
+                ax.axvline(0, color="#555555", linewidth=1, linestyle="--")
+            ax.set_yticks(range(len(cases)), [
+                f"{size.capitalize()} · {label.removesuffix(' model')}"
+                for size, variant in cases
+                for key, label, _ in variants if key == variant
+            ])
+            ax.set_ylim(len(cases) - 0.5, -0.5)
+            ax.grid(axis="x", alpha=0.2)
+            ax.xaxis.set_major_locator(MaxNLocator(nbins=4))
+            ax.xaxis.set_major_formatter(FuncFormatter(lambda value, _: f"{value:.3g}"))
+            ax.tick_params(axis="x", labelsize=9)
+            ax.tick_params(axis="y", labelsize=8)
+            ax.spines[["top", "right"]].set_visible(False)
             ax.set_title(f"{robot.upper()} · q{j+1} ({names[robot][j]})", fontsize=11)
             if lift:
                 ax.set_xlabel(("Mean" if metric == "mean_error" else "Std") + " of squared lift error (mm²)", fontsize=9)
             else:
                 ax.set_xlabel("Mean signed angular error (rad)" if metric == "mean_error" else "Angular error std (rad)", fontsize=9)
-    handles, labels = axes[0, 0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="lower center", bbox_to_anchor=(0.5, 0.09), ncol=len(variants), fontsize=9)
     fig.suptitle("Task 4.A: per-joint " + ("mean error (bias)" if metric == "mean_error" else "error standard deviation"), fontsize=13)
     note = ("Angular means can cancel: near zero means little bias, not necessarily accurate predictions. Read the std graph too."
             if metric == "mean_error" else "Lower std means less variation; read alongside mean bias. Different joints use separate axes and units.")
-    fig.text(0.5, 0.04, note, ha="center", fontsize=9)
-    fig.text(0.5, 0.015, "Handout definitions: signed wrapped angles; squared SCARA lift error. Lift values converted from m² to mm² (×1,000,000).",
+    fig.text(0.5, 0.035, note, ha="center", fontsize=9)
+    fig.text(0.5, 0.01, "Handout definitions: signed wrapped angles; squared SCARA lift error. Lift values converted from m² to mm² (×1,000,000).",
              ha="center", fontsize=8)
-    save(fig, output, bottom=0.18)
+    save(fig, output, bottom=0.12)
 
 
 def accuracy_curves(predictions, output, task):
@@ -225,8 +255,8 @@ def plot_task4a(summary, joints, predictions, output):
         "Blue = joint-loss model; orange = TCP-loss model. Missing checkpoints are not zero errors.\n\n"
         "- [Endpoint mean and standard deviation](comparison.png): closer to the target and variation across test points.\n"
         "- [Endpoint RMSE](tcp_rmse.png): gives larger misses more weight.\n"
-        "- [Per-joint mean errors](joint_mean_errors.png): signed angular bias; SCARA lift uses squared error.\n"
-        "- [Per-joint standard deviations](joint_error_std.png): read with mean bias; do not compare different units.\n"
+        "- [Per-joint mean errors](joint_mean_errors.png): every row names its model size and loss; signed angular bias; SCARA lift uses squared error.\n"
+        "- [Per-joint standard deviations](joint_error_std.png): every row names its model size and loss; read with mean bias and do not compare different units.\n"
         "- [Accuracy curves](tcp_accuracy_curves.png): percentage of test points below each allowed error.\n\n"
         "All test rows are included. FK positions are calculated, not measured in Webots.\n", encoding="utf-8")
 
