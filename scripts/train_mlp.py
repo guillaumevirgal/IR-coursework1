@@ -64,13 +64,14 @@ def load_split(robots, kind, size):
 class MLP:
     """Fully connected ReLU hidden layers, linear output, trained with Adam."""
 
-    def __init__(self, sizes, rng):
+    def __init__(self, sizes, rng, activation="relu"):
         # sizes = (n_in, *hidden, n_out). He initialisation suits ReLU layers;
         # Xavier-style init for the linear output layer.
         self.params = {}
         self.n_layers = len(sizes) - 1
+        self.activation = activation
         for index, (n_from, n_to) in enumerate(zip(sizes[:-1], sizes[1:]), start=1):
-            gain = 1.0 if index == self.n_layers else 2.0
+            gain = 1.0 if (index == self.n_layers or self.activation == "tanh") else 2.0
             self.params[f"W{index}"] = rng.normal(0.0, math.sqrt(gain / n_from), (n_from, n_to))
             self.params[f"b{index}"] = np.zeros(n_to)
         self.m = {key: np.zeros_like(value) for key, value in self.params.items()}
@@ -85,7 +86,12 @@ class MLP:
         for index in range(1, self.n_layers + 1):
             pre = activation @ self.params[f"W{index}"] + self.params[f"b{index}"]
             cache.append((activation, pre))
-            activation = pre if index == self.n_layers else np.maximum(pre, 0.0)
+            if index == self.n_layers:
+                activation = pre  # Keep output linear
+            elif self.activation == "tanh":
+                activation = np.tanh(pre)
+            else:
+                activation = np.maximum(pre, 0.0)
         return activation, cache
 
     def predict(self, x):
@@ -107,7 +113,14 @@ class MLP:
             grads[f"W{index}"] = layer_input.T @ d_pre
             grads[f"b{index}"] = d_pre.sum(axis=0)
             if index > 1:
-                d_pre = (d_pre @ self.params[f"W{index}"].T) * (cache[index - 2][1] > 0.0)
+                prev_pre = cache[index - 2][1]
+
+                if self.activation == "tanh":
+                    derivative = 1.0 - np.tanh(prev_pre) ** 2
+                else:
+                    derivative = (prev_pre > 0.0).astype(float)
+
+                d_pre = (d_pre @ self.params[f"W{index}"].T) * derivative
 
         self.step += 1
         for key, grad in grads.items():
@@ -154,6 +167,7 @@ def parse_args():
     parser.add_argument("--epochs", type=int, default=3000)
     parser.add_argument("--patience", type=int, default=300, help="epochs without validation improvement")
     parser.add_argument("--seed", type=int, default=2026)
+    parser.add_argument("--activation", choices=("relu", "tanh"), default="relu", help="hidden layer activation function")
     return parser.parse_args()
 
 
@@ -172,7 +186,7 @@ def main():
     x_train = (x_train_raw - mean) / std
     x_val = (x_val_raw - mean) / std
 
-    model = MLP((len(INPUTS), *args.hidden, len(OUTPUTS)), rng)
+    model = MLP((len(INPUTS), *args.hidden, len(OUTPUTS)), rng, activation=args.activation)
     best = {"val_loss": math.inf, "epoch": 0, "params": None}
     history = []
 
@@ -207,7 +221,7 @@ def main():
         print(f"{robot}: validation position error {errors.mean() * 1000:.2f} "
               f"± {errors.std() * 1000:.2f} mm (n={len(errors)})")
 
-    name = f"mlp_{'_'.join(args.robots)}_{args.size}_h{'x'.join(map(str, args.hidden))}_{args.decay}"
+    name = f"mlp_{'_'.join(args.robots)}_{args.size}_h{'x'.join(map(str, args.hidden))}_{args.decay}_{args.activation}"
     MODELS.mkdir(exist_ok=True)
     np.savez(MODELS / f"{name}.npz", mean=mean, std=std, **model.params)
     with (MODELS / f"{name}_history.csv").open("w", newline="", encoding="utf-8") as destination:

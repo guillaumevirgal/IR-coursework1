@@ -15,6 +15,6 @@
   "epochs": 3000,
   "patience": 300,
   "seed": 2026,
-  "best_epoch": 2262,
-  "best_val_mse": 0.0006994286508818066
+  "best_epoch": 2142,
+  "best_val_mse": 0.0006888548156906037
 }

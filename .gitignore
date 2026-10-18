@@ -56,7 +56,8 @@ dist/
 *.pickle
 *.joblib
 *.npz
-
+!models/bigger/*.npz
+!models/tanh/*.npz
 # Training output folders
 runs/
 outputs/
