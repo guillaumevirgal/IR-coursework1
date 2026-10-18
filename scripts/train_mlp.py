@@ -7,6 +7,7 @@ Usage:
     python scripts/train_mlp.py                       # small combined model
     python scripts/train_mlp.py --robots ned          # small Ned only
     python scripts/train_mlp.py --size medium --hidden 64 64 --lr 1e-3
+    python scripts/train_mlp.py --size large --hidden 64 64 --loss tcp
 """
 
 import argparse
@@ -23,6 +24,7 @@ sys.path.insert(0, str(ROOT))
 
 from scripts.forward_kinematics_ned import forward_kinematics_ned
 from scripts.forward_kinematics_scara import forward_kinematics_scara
+from scripts.tcp_loss import tcp_loss_and_gradient
 
 
 SPLITS = ROOT / "data" / "nn" / "splits"
@@ -91,17 +93,19 @@ class MLP:
     def predict(self, x):
         return self.forward(x)[0]
 
-    def train_batch(self, x, y, lr, beta1=0.9, beta2=0.999, eps=1e-8):
-        """One Adam step on the MSE loss; returns the batch loss."""
+    def train_batch(self, x, y, lr, beta1=0.9, beta2=0.999, eps=1e-8, loss_fn=None):
+        """One Adam step; optional loss_fn returns (loss, output gradient)."""
 
         output, cache = self.forward(x)
-        error = output - y
-        loss = float(np.mean(error ** 2))
+        if loss_fn is None:
+            error = output - y
+            loss = float(np.mean(error ** 2))
+            d_pre = 2.0 * error / error.size
+        else:
+            loss, d_pre = loss_fn(output)
 
-        # Gradients of mean((output - y)^2) over all batch elements, walked
-        # back from the linear output layer through each ReLU layer.
+        # Walk the selected loss gradient back through the same layers.
         grads = {}
-        d_pre = 2.0 * error / error.size
         for index in range(self.n_layers, 0, -1):
             layer_input, _ = cache[index - 1]
             grads[f"W{index}"] = layer_input.T @ d_pre
@@ -154,7 +158,16 @@ def parse_args():
     parser.add_argument("--epochs", type=int, default=3000)
     parser.add_argument("--patience", type=int, default=300, help="epochs without validation improvement")
     parser.add_argument("--seed", type=int, default=2026)
-    return parser.parse_args()
+    parser.add_argument("--loss", choices=("joints", "tcp"), default="joints",
+                        help="joint-label MSE (baseline) or squared TCP distance through FK")
+    parser.add_argument("--tcp-limit-weight", type=float, default=0.01,
+                        help="TCP loss joint-limit penalty weight (m² per squared normalised joint unit)")
+    args = parser.parse_args()
+    if args.epochs < 1 or args.batch < 1 or args.patience < 1:
+        parser.error("epochs, batch and patience must be positive")
+    if not math.isfinite(args.tcp_limit_weight) or args.tcp_limit_weight < 0:
+        parser.error("tcp-limit-weight must be finite and nonnegative")
+    return args
 
 
 def main():
@@ -175,16 +188,28 @@ def main():
     model = MLP((len(INPUTS), *args.hidden, len(OUTPUTS)), rng)
     best = {"val_loss": math.inf, "epoch": 0, "params": None}
     history = []
+    loss_label = "joint MSE" if args.loss == "joints" else "TCP objective (m², includes limit penalty)"
+    print(f"Training with {loss_label}", flush=True)
+
+    def objective(prediction, labels, raw_inputs):
+        if args.loss == "tcp":
+            return tcp_loss_and_gradient(prediction, raw_inputs, JOINT_LIMITS,
+                                         args.tcp_limit_weight)[0]
+        return float(np.mean((prediction - labels) ** 2))
 
     for epoch in range(1, args.epochs + 1):
         lr = learning_rate(args, epoch)
         order = rng.permutation(len(x_train))
         for start in range(0, len(order), args.batch):
             batch = order[start:start + args.batch]
-            model.train_batch(x_train[batch], y_train[batch], lr)
+            loss_fn = None
+            if args.loss == "tcp":
+                loss_fn = lambda prediction: tcp_loss_and_gradient(
+                    prediction, x_train_raw[batch], JOINT_LIMITS, args.tcp_limit_weight)
+            model.train_batch(x_train[batch], y_train[batch], lr, loss_fn=loss_fn)
 
-        train_loss = float(np.mean((model.predict(x_train) - y_train) ** 2))
-        val_loss = float(np.mean((model.predict(x_val) - y_val) ** 2))
+        train_loss = objective(model.predict(x_train), y_train, x_train_raw)
+        val_loss = objective(model.predict(x_val), y_val, x_val_raw)
         history.append((epoch, lr, train_loss, val_loss))
 
         if val_loss < best["val_loss"]:
@@ -194,29 +219,43 @@ def main():
                 "params": {key: value.copy() for key, value in model.params.items()},
             }
         if epoch % 100 == 0 or epoch == 1:
-            print(f"epoch {epoch:5d}  lr {lr:.1e}  train MSE {train_loss:.6f}  val MSE {val_loss:.6f}", flush=True)
+            print(f"epoch {epoch:5d}  lr {lr:.1e}  train loss {train_loss:.8f}  val loss {val_loss:.8f}", flush=True)
         if epoch - best["epoch"] >= args.patience:
             print(f"Early stop at epoch {epoch}; best epoch {best['epoch']}")
             break
 
     model.params = best["params"]
     q_val = model.predict(x_val)
-    print(f"\nBest validation MSE {best['val_loss']:.6f} at epoch {best['epoch']}")
+    print(f"\nBest validation {loss_label}: {best['val_loss']:.8f} at epoch {best['epoch']}")
+    validation_metrics = {}
     for robot in args.robots:
         errors = position_errors(x_val_raw, q_val, [robot])
+        validation_metrics[robot] = {
+            "mean_tcp_error_mm": float(errors.mean() * 1000),
+            "median_tcp_error_mm": float(np.median(errors) * 1000),
+            "p95_tcp_error_mm": float(np.percentile(errors, 95) * 1000),
+            "max_tcp_error_mm": float(errors.max() * 1000),
+            "rmse_tcp_error_mm": float(np.sqrt(np.mean(errors ** 2)) * 1000),
+        }
         print(f"{robot}: validation position error {errors.mean() * 1000:.2f} "
               f"± {errors.std() * 1000:.2f} mm (n={len(errors)})")
 
     name = f"mlp_{'_'.join(args.robots)}_{args.size}_h{'x'.join(map(str, args.hidden))}_{args.decay}"
+    if args.loss == "tcp":
+        name += "_tcp"
     MODELS.mkdir(exist_ok=True)
     np.savez(MODELS / f"{name}.npz", mean=mean, std=std, **model.params)
     with (MODELS / f"{name}_history.csv").open("w", newline="", encoding="utf-8") as destination:
         writer = csv.writer(destination)
-        writer.writerow(("epoch", "lr", "train_mse", "val_mse"))
+        columns = ("train_mse", "val_mse") if args.loss == "joints" else ("train_loss_m2", "val_loss_m2")
+        writer.writerow(("epoch", "lr", *columns))
         writer.writerows(history)
     with (MODELS / f"{name}.json").open("w", encoding="utf-8") as destination:
-        json.dump({**vars(args), "best_epoch": best["epoch"], "best_val_mse": best["val_loss"]},
-                  destination, indent=2)
+        metadata = {**vars(args), "best_epoch": best["epoch"], "best_val_loss": best["val_loss"],
+                    "validation_fk_metrics": validation_metrics}
+        if args.loss == "joints":
+            metadata["best_val_mse"] = best["val_loss"]
+        json.dump(metadata, destination, indent=2)
     print(f"Saved {MODELS / name}.npz")
 
 

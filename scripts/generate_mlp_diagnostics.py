@@ -5,8 +5,6 @@ import csv
 import json
 import os
 from pathlib import Path
-import shutil
-import subprocess
 import sys
 import tempfile
 
@@ -35,7 +33,9 @@ INPUTS = ("is_scara", "is_ned", "x", "y", "z")
 WORLDS = {"ned": "articulated.wbt", "scara": "scara.wbt"}
 
 sys.path.insert(0, str(ROOT))
-from scripts.run_dataset_generation import find_webots  # noqa: E402
+from scripts.webots_mlp_runner import (  # noqa: E402
+    write_cases, make_diagnostic_world, remove_world, run_webots,
+)
 from scripts.train_mlp import MLP, denormalise  # noqa: E402
 from scripts.forward_kinematics_ned import forward_kinematics_ned  # noqa: E402
 from scripts.forward_kinematics_scara import forward_kinematics_scara  # noqa: E402
@@ -130,63 +130,6 @@ def kinematic_workspace_boundary(robot, resolution=32):
                     if point[2] >= floor_z:
                         points.append(point)
     return np.asarray(points)
-
-
-def write_cases(path, cases):
-    with path.open("w", newline="", encoding="utf-8") as destination:
-        writer = csv.DictWriter(destination, fieldnames=("label", "kind", "x", "y", "z"))
-        writer.writeheader()
-        for case in cases:
-            writer.writerow(dict(zip(("label", "kind", "x", "y", "z"),
-                                     (case["label"], case["kind"], *case["point"]))))
-
-
-def make_diagnostic_world(robot, model, points, output, settle_time, timeout):
-    source = ROOT / "worlds" / WORLDS[robot]
-    content = source.read_text(encoding="utf-8")
-    if content.count('  controller "mlp_ik"') != 1:
-        raise RuntimeError(f"Expected one MLP controller in {source}")
-    content = content.replace('  controller "mlp_ik"', '  controller "diagnose_mlp"', 1)
-    args_block = (f'  controllerArgs [\n    "{robot}"\n    "--model={model}"\n'
-                  f'    "--points={points.as_posix()}"\n    "--output={output.as_posix()}"\n'
-                  f'    "--settle-time={settle_time}"\n    "--timeout={timeout}"\n  ]')
-    start = content.index("  controllerArgs [", content.index('controller "diagnose_mlp"'))
-    end = content.index("  ]", start) + 3
-    content = content[:start] + args_block + content[end:]
-    handle = tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", suffix=".wbt",
-                                         prefix=f"diagnostic_{robot}_", dir=source.parent,
-                                         delete=False)
-    with handle:
-        handle.write(content)
-    return Path(handle.name)
-
-
-def remove_world(path):
-    for candidate in (path, path.with_suffix(".wbproj"), path.with_name(f".{path.stem}.wbproj")):
-        try:
-            candidate.unlink()
-        except FileNotFoundError:
-            pass
-
-
-def run_webots(robot, model, cases, args):
-    webots = find_webots(args.webots)
-    args.output = args.output.resolve()
-    args.output.mkdir(parents=True, exist_ok=True)
-    work = Path(tempfile.mkdtemp(prefix=f"{robot}_", dir=args.output))
-    points_path, measured_path = work / "points.csv", work / "webots.csv"
-    write_cases(points_path, cases)
-    world = make_diagnostic_world(robot, model, points_path, measured_path,
-                                  args.settle_time, args.timeout)
-    command = [str(webots), "--batch", "--mode=fast", "--no-rendering", "--stdout", "--stderr", str(world)]
-    print(f"Running {robot} diagnostics in headless Webots ({len(cases)} targets)...", flush=True)
-    try:
-        subprocess.run(command, check=True)
-    finally:
-        remove_world(world)
-    rows = read_rows(measured_path)
-    shutil.rmtree(work, ignore_errors=True)
-    return rows
 
 
 def analyse_point(robot, point, model, mean, std, train_xyz, support_95, measured):

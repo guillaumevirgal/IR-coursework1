@@ -1,0 +1,38 @@
+{
+  "robots": [
+    "ned",
+    "scara"
+  ],
+  "size": "small",
+  "hidden": [
+    64,
+    64
+  ],
+  "lr": 0.001,
+  "lr_min": 1e-05,
+  "decay": "cosine",
+  "batch": 32,
+  "epochs": 3000,
+  "patience": 300,
+  "seed": 2026,
+  "loss": "tcp",
+  "tcp_limit_weight": 0.01,
+  "best_epoch": 1312,
+  "best_val_loss": 1.6267616370732765e-05,
+  "validation_fk_metrics": {
+    "ned": {
+      "mean_tcp_error_mm": 4.5796783723667165,
+      "median_tcp_error_mm": 3.7634211814819274,
+      "p95_tcp_error_mm": 10.314241058610312,
+      "max_tcp_error_mm": 17.95697161670193,
+      "rmse_tcp_error_mm": 5.493639516998998
+    },
+    "scara": {
+      "mean_tcp_error_mm": 1.378101092865605,
+      "median_tcp_error_mm": 1.2530958057241588,
+      "p95_tcp_error_mm": 2.536627995618799,
+      "max_tcp_error_mm": 4.283453407531567,
+      "rmse_tcp_error_mm": 1.5346522729050247
+    }
+  }
+}
