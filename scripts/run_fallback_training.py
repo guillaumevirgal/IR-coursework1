@@ -167,16 +167,17 @@ def sample_requests(robot, count, seed, certificate, reference_xyz):
 
 
 def build_dataset(args):
-    manifest = {"seed": args.seed, "policy": "closest accepted pose within 2 degrees of best recorded request direction",
+    manifest = {"seed": args.seed, "size": args.size, "policy": "closest accepted pose within 2 degrees of best recorded request direction",
                 "direction": {"ned": "3D shoulder-to-request direction", "scara": "planar yaw-axis-to-request bearing"},
                 "direction_tolerance_deg": 2.0,
                 "certificate": "65^3 full joint grid with global Jacobian cover bound; analytic sphere/cylinder bounds",
                 "minimum_unreachable_clearance_m": 0.005,
                 "query_offsets_m": [0.015, 0.60], "near_far_split_m": 0.10,
-                "label_bank": "original train_large.csv only; no validation/test poses",
+                "label_bank": f"original train_{args.size}.csv only; no validation/test poses",
+                "shared_test_requests": str(args.test_requests) if args.test_requests else None,
                 "robots": {}}
     for robot_index, robot in enumerate(ROBOTS):
-        reference = read_csv(ORIGINAL / robot / "train_large.csv")
+        reference = read_csv(ORIGINAL / robot / f"train_{args.size}.csv")
         reference_xyz = array(reference, "xyz")
         certificate = WorkspaceCertificate(robot)
         # Ensure the conservative certificate does not reject any known valid pose.
@@ -189,13 +190,27 @@ def build_dataset(args):
         counts = {}
         seen = set()
         for split_index, (split, extra_count) in enumerate((
-                ("train_large", args.train_extra), ("validation_large", args.train_extra // 4),
+                (f"train_{args.size}", args.train_extra), (f"validation_{args.size}", args.train_extra // 4),
                 ("test", args.test_extra))):
             original_rows = read_csv(ORIGINAL / robot / f"{split}.csv")
             rows = [{**row, "kind": "reachable", **{f"desired_{a}": row[a] for a in "xyz"}}
                     for row in original_rows]
             seed = np.random.SeedSequence([args.seed, robot_index, split_index])
-            queries = sample_requests(robot, extra_count, seed, certificate, reference_xyz)
+            if split == "test" and args.test_requests:
+                # Reuse only requested XYZ. Desired poses and joint labels are
+                # recomputed from this size's training bank, never copied.
+                shared = [r for r in read_csv(args.test_requests / robot / "test.csv") if r["kind"] == "unreachable"]
+                if len(shared) != extra_count:
+                    raise ValueError(f"Expected {extra_count} shared test requests for {robot}")
+                points = array(shared, "xyz")
+                lower_bounds = certificate.lower_bound(points)
+                distances, indices = cKDTree(reference_xyz).query(points)
+                if np.any(lower_bounds <= 0.005):
+                    raise AssertionError("Shared test query is not certified unreachable")
+                queries = [(point, int(index), float(lower), "near" if distance < 0.10 else "far")
+                           for point, index, lower, distance in zip(points, indices, lower_bounds, distances)]
+            else:
+                queries = sample_requests(robot, extra_count, seed, certificate, reference_xyz)
             points = np.array([query[0] for query in queries])
             chosen, best_angles = choose_directional_poses(robot, points, reference_xyz)
             selected_angles = direction_errors(robot, points, reference_xyz[chosen])
@@ -345,7 +360,7 @@ def draw_report(summaries, measurements, manifest, args):
     test_rows = [r for r in summaries if r["model"] == MODEL]
     # Test has a 1:1 group mix while train/validation have a 2:1 mix. Match
     # validation weights in this loss plot; per-group result tables stay raw.
-    weights = [manifest["robots"][r["robot"]]["counts"]["validation_large"][r["kind"]]
+    weights = [manifest["robots"][r["robot"]]["counts"][f"validation_{args.size}"][r["kind"]]
                for r in test_rows]
     test_mse = sum(float(r["joint_mse_normalised"]) * w for r, w in zip(test_rows, weights)) / sum(weights)
     ax.scatter([config["best_epoch"]], [test_mse], marker="D", color="#4a9b67", edgecolor="#202020",
@@ -420,8 +435,9 @@ def draw_report(summaries, measurements, manifest, args):
     lines = ["# Joint-loss directional fallback experiment", "",
         "The new dataset teaches the arm to point toward an unreachable request, then approach it. Ned uses the 3D direction from its shoulder; SCARA uses horizontal bearing because its links cannot tilt upward. Find the best recorded direction; among accepted poses within 2 degrees of that direction error, choose the TCP closest to the request. If SCARA's requested point is exactly on its yaw axis, bearing is undefined and distance alone chooses the label. This selects the best available recorded pose; a finite pose bank does not prove a globally optimal result.", "",
         "New requests are certified outside the full joint-limited FK workspace using a conservative grid-cover bound or an analytic enclosing volume, with a minimum 5 mm clearance. Half the generated requests are within 100 mm of the accepted pose bank and half farther away. Query displacements span 15–600 mm from bank positions. Every label uses an original training pose with a Webots audit row. The requests are synthetic; no simulated TCP reading is invented at an impossible requested location.", "",
+        (f"The {args.size} experiment reuses only unreachable test requested XYZ from `{args.test_requests}` for comparison on identical inputs. Its fallback joint labels are recomputed using the {args.size} training bank only. The shared test group need not retain the medium bank's near/far proportions." if args.test_requests else "Unreachable test requests are sampled independently of training and validation queries."), "",
         "Original reachable rows retain their labels. New query splits have independent seeds, and validation/test poses never supply training labels. This tests new requests against a fixed training reference bank. Accepted static poses do not guarantee collision-free motion, and the MLP can predict an unrecorded configuration. Its response beyond the sampled query distribution is unverified.", "",
-        f"Training reuses the 5→64→64→3 NumPy ReLU MLP, Adam and joint MSE, from scratch with seed {args.seed} and up to {args.epochs} epochs. Validation joint MSE selected epoch {config['best_epoch']}; training ended at epoch {history[-1]['epoch']}. Best validation joint MSE: {config['best_val_loss']:.8f}. Test data were evaluated afterward. This comparison changes data quantity and distribution together.", "",
+        f"Training uses the {args.size} split and reuses the 5→64→64→3 NumPy ReLU MLP, Adam and joint MSE, from scratch with seed {args.seed} and up to {args.epochs} epochs. Validation joint MSE selected epoch {config['best_epoch']}; training ended at epoch {history[-1]['epoch']}. Best validation joint MSE: {config['best_val_loss']:.8f}. Test data were evaluated afterward. This comparison changes data quantity and distribution together.", "",
         "Split counts per arm: " + json.dumps(manifest["robots"]["ned"]["counts"]), "",
         "## Requested-point endpoint error", "",
         "For each sample, e = Euclidean distance from final TCP to requested XYZ, in mm. MSE = mean(e²), in mm²; RMSE = sqrt(mean(e²)), in mm. Mean/std are statistics of e, using population std. Unreachable requests include an unavoidable geometric gap, so their RMSE cannot be interpreted as ordinary reachable IK accuracy.", "",
@@ -449,23 +465,128 @@ def draw_report(summaries, measurements, manifest, args):
             lines.append(f"| {row['robot']} | {row['kind']} | {label(row['model'])} | {row['samples']} | {row['settled']} | {row['requested_tcp_rmse_mm']:.2f} | {row['desired_tcp_rmse_mm']:.2f} |")
     lines += ["", "## Training loss", "", "![Training, validation and test joint MSE](training_loss.png)", "",
         "The test marker is reweighted to validation group proportions (2 reachable to 1 unreachable in this run); the test files have an equal group mix. Per-group endpoint metrics above are unweighted. Curves are 25-epoch moving averages.", "",
-        "## Run and use", "", f"Run `python scripts/run_fallback_training.py --name {args.name}_repeat` from the repository root; add `--webots PATH` for physics measurements. Existing paths/checkpoints are refused. Data: `{DATASET.relative_to(ROOT)}`; policy audit: `{AUDIT.relative_to(ROOT)}`. `manifest.json` records dataset hashes and `source_integrity.json` confirms original data and checkpoint hashes.", "",
+        "## Run and use", "", f"Run `python scripts/run_fallback_training.py --size {args.size} --name {args.name}_repeat" + (f" --test-requests {args.test_requests}" if args.test_requests else "") + f"` from the repository root; add `--webots PATH` for physics measurements. Existing paths/checkpoints are refused. Data: `{DATASET.relative_to(ROOT)}`; policy audit: `{AUDIT.relative_to(ROOT)}`. `manifest.json` records dataset hashes and `source_integrity.json` confirms original data and checkpoint hashes.", "",
         f'In Webots keep controller `mlp_ik` and append `"--model={MODEL}"` after `"ned"` or `"scara"` in `controllerArgs`. The network supplies the learned fallback response.', ""]
     (REPORT / "README.md").write_text("\n".join(lines), encoding="utf-8")
 
 
+def compare_sizes(reference_dataset):
+    """Compare requested-point RMSE only, after checking identical test inputs.
+
+    Fallback labels use different pose banks at different training sizes, so
+    fallback-label imitation errors are not used to rank sizes here.
+    """
+    reference_report = ROOT / "reports" / reference_dataset.name
+    if not (reference_report / "test_summary.csv").is_file():
+        return
+    for robot in ROBOTS:
+        current = read_csv(DATASET / robot / "test.csv")
+        reference = read_csv(reference_dataset / robot / "test.csv")
+        if [r["kind"] for r in current] != [r["kind"] for r in reference] or not np.array_equal(
+                array(current, INPUTS), array(reference, INPUTS)):
+            raise ValueError("Size comparison requires identical test requested inputs")
+    os.environ.setdefault("MPLCONFIGDIR", "/tmp/fallback-training-mpl")
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    def collect(filename):
+        collected = []
+        for folder in (REPORT, reference_report):
+            for row in read_csv(folder / filename):
+                config = json.loads((ROOT / f"models/{row['model']}.json").read_text(encoding="utf-8"))
+                size = config["size"]
+                original = row["model"] == f"mlp_ned_scara_{size}_h64x64_cosine"
+                collected.append({"size": size, "model": row["model"], "variant": "original" if original else "fallback",
+                    "robot": row["robot"], "kind": row["kind"], "samples": int(row["samples"]),
+                    "requested_tcp_rmse_mm": float(row["requested_tcp_rmse_mm"])})
+        return collected
+
+    def graph(rows, filename, title):
+        sizes = [s for s in ("small", "medium", "large") if any(r["size"] == s for r in rows)]
+        fig, axes = plt.subplots(2, 2, figsize=(10, 7))
+        x = np.arange(len(sizes))
+        for i, robot in enumerate(ROBOTS):
+            for j, kind in enumerate(("reachable", "unreachable")):
+                ax = axes[i, j]
+                for k, (variant, color, label) in enumerate((
+                        ("original", "#2878b5", "Original joint-loss model"),
+                        ("fallback", "#e07a3f", "Joint-loss model with fallback data"))):
+                    values = [next(r["requested_tcp_rmse_mm"] for r in rows if r["robot"] == robot
+                                   and r["kind"] == kind and r["size"] == size and r["variant"] == variant) for size in sizes]
+                    bars = ax.bar(x + (k - 0.5) * 0.36, values, width=0.34, color=color, label=label)
+                    ax.bar_label(bars, fmt="%.2f", fontsize=8, padding=3)
+                ax.set_xticks(x, [s.capitalize() for s in sizes])
+                ax.set_title(f"{robot.upper()} · {kind} requests")
+                ax.set_ylabel("Requested-point TCP RMSE (mm)")
+                ax.margins(y=0.2)
+                ax.spines[["top", "right"]].set_visible(False)
+        handles, labels = axes[0, 0].get_legend_handles_labels()
+        fig.legend(handles, labels, loc="lower center", ncol=2, bbox_to_anchor=(.5, .01), fontsize=9)
+        fig.suptitle(title)
+        fig.tight_layout(rect=(0, .07, 1, .94))
+        fig.savefig(REPORT / filename, dpi=160)
+        plt.close(fig)
+
+    rows = collect("test_summary.csv")
+    sizes = [s for s in ("small", "medium", "large") if any(r["size"] == s for r in rows)]
+    if len(sizes) != 2:
+        return
+    size_title = " versus ".join(sizes)
+    write_csv(REPORT / "size_comparison.csv", rows)
+    graph(rows, "size_comparison.png", f"Same held-out points: {size_title} joint-loss models")
+    lines = ["# Dataset-size comparison on identical requested points", "",
+             "Every model is evaluated on exactly the same 1,000 reachable and 1,000 unreachable requested points per arm. Each size retains its original reachable split and adds half as many synthetic training examples (medium: 4,000 + 2,000; large: 12,000 + 6,000). Both use the same architecture, joint loss and training settings. Fallback labels use only each size's own training pose bank, so bank density and training quantity both change.", "",
+             "![Endpoint RMSE comparison](size_comparison.png)", "",
+             "The table compares the two models trained with fallback examples; the graph also includes the original checkpoints.", "",
+             f"| Arm | Requests | {sizes[0].capitalize()} with fallback RMSE (mm) | {sizes[1].capitalize()} with fallback RMSE (mm) | Lower RMSE |",
+             "|---|---|---:|---:|---|"]
+    for robot in ROBOTS:
+        for kind in ("reachable", "unreachable"):
+            subset = [r for r in rows if r["variant"] == "fallback" and r["robot"] == robot and r["kind"] == kind]
+            values = {r["size"]: r["requested_tcp_rmse_mm"] for r in subset}
+            lower = min(values, key=values.get).capitalize()
+            lines.append(f"| {robot} | {kind} | {values[sizes[0]]:.2f} | {values[sizes[1]]:.2f} | {lower} |")
+    if all((folder / "webots_summary.csv").is_file() for folder in (REPORT, reference_report)):
+        # Verify measured requests too; historical simulator subsets can differ.
+        for robot in ROBOTS:
+            requests = []
+            for folder in (REPORT, reference_report):
+                measured = read_csv(folder / "webots_predictions.csv")
+                first_model = next(r["model"] for r in measured if r["robot"] == robot)
+                requests.append(array([r for r in measured if r["robot"] == robot and r["model"] == first_model], "xyz"))
+            if not np.array_equal(*requests):
+                raise ValueError("Webots size comparison requires identical measured requests")
+        measured_rows = collect("webots_summary.csv")
+        write_csv(REPORT / "webots_size_comparison.csv", measured_rows)
+        graph(measured_rows, "webots_size_comparison.png", f"Same Webots targets: {size_title} joint-loss models")
+        lines += ["", "![Measured endpoint RMSE comparison](webots_size_comparison.png)", "",
+                  "Webots comparison uses identical first 10 reachable and 20 unreachable test requests per arm/model. Full measurements and settling status are retained in each experiment's report folder."]
+    lines += ["", "The endpoint reference here is requested XYZ, including unreachable points. Fallback endpoints differ between the finite medium and large pose banks, so error to those different fallback labels is not used to rank sizes."]
+    (REPORT / "size_comparison.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    link = f"\n[{size_title.capitalize()} comparison on the same test inputs](size_comparison.md).\n"
+    if link not in (REPORT / "README.md").read_text(encoding="utf-8"):
+        with (REPORT / "README.md").open("a", encoding="utf-8") as destination:
+            destination.write(link)
+
+
 def main():
-    global MODEL, DATASET, AUDIT, REPORT
+    global BASELINE, MODEL, DATASET, AUDIT, REPORT
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--name", default="directional_fallback", help="unique experiment name; existing results are never overwritten")
+    parser.add_argument("--size", choices=("small", "medium", "large"), default="large")
+    parser.add_argument("--name", help="unique experiment name; defaults to directional_fallback (plus size for medium/small)")
     parser.add_argument("--seed", type=int, default=2026)
-    parser.add_argument("--train-extra", type=int, default=6000, help="unreachable training rows per arm; validation adds one quarter")
+    parser.add_argument("--train-extra", type=int, help="unreachable training rows per arm; default is half the original training count")
+    parser.add_argument("--test-requests", type=Path, help="reuse only unreachable test inputs from another experiment, with fresh labels")
     parser.add_argument("--test-extra", type=int, default=1000)
     parser.add_argument("--epochs", type=int, default=3000)
     parser.add_argument("--webots", type=Path)
     args = parser.parse_args()
+    args.name = args.name or ("directional_fallback" if args.size == "large" else f"directional_fallback_{args.size}")
+    args.train_extra = args.train_extra if args.train_extra is not None else {"small": 400, "medium": 2000, "large": 6000}[args.size]
     if not re.fullmatch(r"[A-Za-z0-9_-]+", args.name):
         parser.error("name must contain only letters, numbers, underscores or hyphens")
+    BASELINE = f"mlp_ned_scara_{args.size}_h64x64_cosine"
     MODEL = BASELINE + "_" + args.name
     DATASET, AUDIT, REPORT = (ROOT / f"data/nn/{args.name}", ROOT / f"data/raw/{args.name}", ROOT / f"reports/{args.name}")
     if args.train_extra < 4 or args.train_extra % 4 or args.test_extra < 2 or args.epochs < 1 or args.seed < 0:
@@ -481,7 +602,7 @@ def main():
     REPORT.mkdir(parents=True)
     try:
         manifest = build_dataset(args)
-        command = [sys.executable, str(ROOT / "scripts/train_mlp.py"), "--size", "large", "--hidden", "64", "64",
+        command = [sys.executable, str(ROOT / "scripts/train_mlp.py"), "--size", args.size, "--hidden", "64", "64",
                    "--loss", "joints", "--epochs", str(args.epochs), "--seed", str(args.seed),
                    "--splits-dir", str(DATASET), "--model-name", MODEL]
         print(f"Training {MODEL}; progress is saved in {REPORT / 'training_output.txt'}", flush=True)
@@ -491,6 +612,8 @@ def main():
         args.output, args.settle_time, args.timeout = REPORT, 0.25, 10.0
         measurements = evaluate_webots(args) if args.webots else []
         draw_report(summaries, measurements, manifest, args)
+        if args.test_requests:
+            compare_sizes(args.test_requests)
         model_paths = [ROOT / f"models/{name}.{ext}" for name in (BASELINE, MODEL) for ext in ("json", "npz")]
         (REPORT / "model_provenance.json").write_text(json.dumps(fingerprint(model_paths), indent=2), encoding="utf-8")
         print(f"Experiment report: {REPORT / 'README.md'}", flush=True)

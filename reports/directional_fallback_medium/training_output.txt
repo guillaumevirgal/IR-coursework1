@@ -1,0 +1,21 @@
+Training with joint MSE
+epoch     1  lr 1.0e-03  train loss 0.07526060  val loss 0.07387927
+epoch   100  lr 1.0e-03  train loss 0.01149707  val loss 0.01283260
+epoch   200  lr 9.9e-04  train loss 0.00958375  val loss 0.01108475
+epoch   300  lr 9.8e-04  train loss 0.00873111  val loss 0.01025110
+epoch   400  lr 9.6e-04  train loss 0.00877909  val loss 0.01067168
+epoch   500  lr 9.3e-04  train loss 0.00704485  val loss 0.00888375
+epoch   600  lr 9.1e-04  train loss 0.00709309  val loss 0.00919014
+epoch   700  lr 8.7e-04  train loss 0.00735524  val loss 0.00948202
+epoch   800  lr 8.4e-04  train loss 0.00803002  val loss 0.01015388
+epoch   900  lr 8.0e-04  train loss 0.00699716  val loss 0.00938454
+epoch  1000  lr 7.5e-04  train loss 0.00720543  val loss 0.00982535
+epoch  1100  lr 7.1e-04  train loss 0.00629954  val loss 0.00891447
+epoch  1200  lr 6.6e-04  train loss 0.00616973  val loss 0.00881525
+epoch  1300  lr 6.1e-04  train loss 0.00640436  val loss 0.00905553
+Early stop at epoch 1370; best epoch 1070
+
+Best validation joint MSE: 0.00848313 at epoch 1070
+ned: validation desired TCP error 20.28 ± 21.42 mm (n=1500)
+scara: validation desired TCP error 6.33 ± 12.08 mm (n=1500)
+Saved /workspace/IR-coursework1/models/mlp_ned_scara_medium_h64x64_cosine_directional_fallback_medium.npz
