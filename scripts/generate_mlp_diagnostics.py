@@ -203,8 +203,8 @@ def draw_case(robot, model_name, case, result, workspace_boundary, output):
     # Compare distances in physical space: zero is the requested target.
     training_mm = result["distances"][result["nearest"]] * 1000.0
     distances_mm = np.r_[training_mm, np.linalg.norm(actual - target) * 1000.0]
-    labels = ["Closest training point"] + [
-        f"{rank} closest training point" for rank in ("2nd", "3rd", "4th", "5th")
+    labels = ["Closest training request"] + [
+        f"{rank} closest training request" for rank in ("2nd", "3rd", "4th", "5th")
     ][:len(training_mm) - 1] + ["Where the robot ended up"]
     positions = np.arange(len(labels))
     colors = ["#4c956c"] * len(training_mm) + ["#2878b5"]
@@ -223,18 +223,19 @@ def draw_case(robot, model_name, case, result, workspace_boundary, output):
                           max(float(distances_mm.max()), 1.0) * 1.55)
     ax_neighbors.set_xlabel("Distance from the requested point (mm) — closer to 0 is closer",
                             fontsize=9)
-    ax_neighbors.set_title("Has the model seen points near this request?", pad=30, fontsize=11)
+    ax_neighbors.set_title("Nearby training requests (including virtual inputs)" if result.get("synthetic_training")
+                           else "Has the model seen points near this request?", pad=30, fontsize=11)
     ax_neighbors.spines[["top", "right", "left"]].set_visible(False)
     ax_neighbors.tick_params(axis="y", length=0)
     spacing_mm = result["support_95"] * 1000.0
     if result["weak_support"]:
-        takeaway = (f"Even the closest training point is {training_mm[0]:.1f} mm away.\n"
+        takeaway = (f"Even the closest training request is {training_mm[0]:.1f} mm away.\n"
                     "Few nearby examples: the model must predict beyond nearby training data.")
     else:
-        takeaway = (f"The closest training point is {training_mm[0]:.1f} mm away.\n"
+        takeaway = (f"The closest training request is {training_mm[0]:.1f} mm away.\n"
                     "Nearby examples exist; this alone does not guarantee an accurate prediction.")
     ax_neighbors.text(0, -0.27, takeaway +
-                      f"\nFor context: 95% of training points have a neighbour within {spacing_mm:.1f} mm.",
+                      f"\nFor context: 95% of training requests have a neighbour within {spacing_mm:.1f} mm.",
                       transform=ax_neighbors.transAxes, va="top", fontsize=8)
 
     # Prediction path: target -> network -> clipping -> physical commands -> TCP result.
@@ -331,7 +332,9 @@ def draw_reachability_comparison(robot, rows, output):
     fig.suptitle(f"{robot.upper()}: are requests near the training data?", fontsize=14, y=0.98)
     fig.supxlabel("Distance to closest training example (mm) — smaller means closer", y=0.07)
     fig.text(0.5, 0.02,
-             "Each dot is one target. Beyond the dashed line means few nearby training examples.",
+             ("Training requests include virtual unreachable inputs; proximity does not establish reachability."
+              if any(row.get("training_contains_unreachable") for row in rows)
+              else "Each dot is one target. Beyond the dashed line means few nearby training examples."),
              ha="center", fontsize=9)
     fig.tight_layout(rect=(0.03, 0.16, 0.98, 0.92), w_pad=2.0)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -373,6 +376,10 @@ def main():
     robots = ("ned", "scara") if args.robot == "both" else (args.robot,)
     args.output.mkdir(parents=True, exist_ok=True)
     summary_rows = []
+    config = json.loads((MODELS / f"{args.model}.json").read_text(encoding="utf-8"))
+    training_dir = Path(config.get("splits_dir", DATA))
+    if not training_dir.is_absolute():
+        training_dir = ROOT / training_dir
     for robot in robots:
         robot_summary_rows = []
         cases = robot_points(robot, args.samples) + extra_points(args.points_csv, robot)
@@ -381,7 +388,9 @@ def main():
             raise ValueError(f"Duplicate diagnostic labels for {robot}; labels must be unique")
         model, mean, std = load_model(args.model, robot)
         measured_rows = run_webots(robot, args.model, cases, args)
-        train_rows = read_rows(DATA / robot / f"train_{args.size}.csv")
+        training_csv = training_dir / robot / f"train_{args.size}.csv"
+        train_rows = read_rows(training_csv)
+        synthetic_training = any(row.get("kind") == "unreachable" for row in train_rows)
         train_xyz = np.array([[float(row[axis]) for axis in "xyz"] for row in train_rows])
         workspace_boundary = kinematic_workspace_boundary(robot)
         tree_distances, _ = cKDTree(train_xyz).query(train_xyz, k=2)
@@ -390,10 +399,13 @@ def main():
         for case in cases:
             result = analyse_point(robot, case["point"], model, mean, std, train_xyz, support_95,
                                   measured_by_label[case["label"]])
+            result["synthetic_training"] = synthetic_training
             filename = f"{robot}_{case['label']}.png"
             draw_case(robot, args.model, case, result, workspace_boundary,
                       args.output / filename)
             row = {"robot": robot, "label": case["label"], "kind": case["kind"],
+                "training_csv": training_csv.relative_to(ROOT).as_posix() if training_csv.is_relative_to(ROOT) else str(training_csv),
+                "training_contains_unreachable": synthetic_training,
                 "x": result["target"][0], "y": result["target"][1], "z": result["target"][2],
                 "nearest_training_distance_m": float(np.min(result["distances"])),
                 "training_spacing_p95_m": support_95, "weak_training_support": result["weak_support"],
@@ -412,7 +424,7 @@ def main():
     summary_path = args.output / "summary.csv"
     if summary_rows:
         with summary_path.open("w", newline="", encoding="utf-8") as destination:
-            writer = csv.DictWriter(destination, fieldnames=summary_rows[0].keys())
+            writer = csv.DictWriter(destination, fieldnames=summary_rows[0].keys(), lineterminator="\n")
             writer.writeheader(); writer.writerows(summary_rows)
     print(f"Generated {len(summary_rows)} end-to-end Webots diagnostics in {args.output}")
     print(f"Summary: {summary_path}")
