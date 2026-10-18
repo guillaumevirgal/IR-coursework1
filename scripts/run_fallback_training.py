@@ -635,7 +635,7 @@ def compare_models(args, names):
         fig.savefig(REPORT / filename, dpi=160)
         plt.close(fig)
 
-    endpoint_plot(summaries, "test_comparison.png", "Same test requests: previous models versus 20,000-row training datasets")
+    endpoint_plot(summaries, "test_comparison.png", "Same test requests: original, 2:1 and 3:1 models")
     if measured_summary:
         endpoint_plot(measured_summary, "webots_comparison.png", "Measured in Webots: same 10 reachable + 20 unreachable requests per arm/model")
     new_names = [n for n in names if configs[n].get("splits_dir") == str(DATASET.relative_to(ROOT))]
@@ -674,12 +674,13 @@ def compare_models(args, names):
     lines = ["# 20,000 total training rows per robot: joint loss versus TCP loss", "",
         "Training per robot: 15,000 reachable + 5,000 certified unreachable requests (3:1). Validation: 3,750 + 1,250. Test: 1,000 + 1,000, identical requested inputs to the previous fallback experiments. Both new models use the same 5→64→64→3 ReLU architecture, seed 2026, Adam, batch 32, cosine learning-rate schedule, 3,000-epoch maximum and patience 300. Best checkpoints are chosen by validation only.", "",
         "Joint loss learns the normalised joint label. TCP loss learns the corresponding desired endpoint through the robot-specific differentiable FK, plus the existing joint-limit penalty. For unreachable requests the desired endpoint is the accepted fallback pose, while the network input remains the requested point. The original TCP datasets have no fallback targets and retain their original requested-point objective.", "",
+        "The held-out inputs are identical across models. Earlier datasets differ in both row count and reachable-pose-bank size, so the 3:1 versus 2:1 comparison does not isolate ratio alone.", "",
         "![Endpoint RMSE on all test requests](test_comparison.png)", "",
-        "| Robot | Requests | Training / loss | Requested TCP RMSE (mm) | Mean error (mm) | Fallback TCP RMSE (mm) |",
+        "| Robot | Requests | Training / loss | Requested TCP RMSE (mm) | Mean error (mm) | Chosen target TCP RMSE (mm) |",
         "|---|---|---|---:|---:|---:|"]
     for r in summaries:
         lines.append(f"| {r['robot']} | {r['kind']} | {labels[r['model']].replace(chr(10), ' / ')} | {r['requested_tcp_rmse_mm']:.2f} | {r['requested_tcp_mean_mm']:.2f} | {r['desired_tcp_rmse_mm']:.2f} |")
-    lines += ["", "Requested-point RMSE is the main endpoint metric. Unreachable requests include an unavoidable geometric gap. Fallback error measures imitation of the chosen desired endpoint. FK test results are calculated from clipped model commands; Webots results below are measured after settling. Bank size, data quantity and ratio change together compared with previous models, so this is not an isolated test of the ratio.", "",
+    lines += ["", "Requested-point RMSE is the main endpoint metric. Unreachable requests include an unavoidable geometric gap. The chosen-target RMSE compares predictions with the requested point for the original reachable-only models, and with the learned fallback endpoint for the new models. FK test results are calculated from clipped model commands; Webots results below are measured after settling. Bank size, data quantity and ratio change together compared with previous models, so this is not an isolated test of the ratio.", "",
         "![Training, validation and test losses](training_loss.png)", "",
         "| New model | Best epoch | Training stopped at epoch | Best validation objective |",
         "|---|---:|---:|---:|"]

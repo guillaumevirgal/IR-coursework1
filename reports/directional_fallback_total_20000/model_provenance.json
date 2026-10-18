@@ -1,0 +1,12 @@
+{
+  "models/mlp_ned_scara_large_h64x64_cosine.json": "1a6d0da99fad20826c9a9a9f66df77d29dbcbfad5c0ea7de2f355579505a411c",
+  "models/mlp_ned_scara_large_h64x64_cosine.npz": "c2ac0c58c7f5623731f01604d7465e3373f7cfe06a0526d1d83156732ba811e2",
+  "models/mlp_ned_scara_large_h64x64_cosine_tcp.json": "18054d084cbfccc1e7f528db6635946a4c33c7f3d204ed7ed786a7d729f3a588",
+  "models/mlp_ned_scara_large_h64x64_cosine_tcp.npz": "7fa2ddeba777a9ac85b0c1bd5ab8303a799066f89919349adc51195bd86b0694",
+  "models/mlp_ned_scara_large_h64x64_cosine_directional_fallback.json": "17f9c5667f56d3e5fbb9d5b73c2f71bccd54c31193723193cc3df1415c720ec7",
+  "models/mlp_ned_scara_large_h64x64_cosine_directional_fallback.npz": "7ba087eb9ec41cdb5eb6b0077bbe9a258ac610b12719245a13b7af471804dd9c",
+  "models/mlp_ned_scara_total20000_3to1_joints.json": "1876d80fc38765e07771622c994923d854b80dc0a3d6130a8faba773d1bace19",
+  "models/mlp_ned_scara_total20000_3to1_joints.npz": "1eb645104e0be516d29b8f5f2ebb3a70741db065ff8a6e0d18a39ac37d507b42",
+  "models/mlp_ned_scara_total20000_3to1_tcp.json": "eebc468d61d89c682d8fcec93016d3674e467e11b57f90111041ec33d2050c75",
+  "models/mlp_ned_scara_total20000_3to1_tcp.npz": "e3808d540c03815376875224a63914818effdfd4aa5709f5850cef84f5589a2d"
+}
