@@ -594,8 +594,15 @@ def compare_models(args, names):
     labels = {}
     for name, config in configs.items():
         directory = config.get("splits_dir", "data/nn/splits")
-        ratio = "3:1" if directory == str(DATASET.relative_to(ROOT)) else ("2:1" if "fallback" in directory else "Reachable only")
-        labels[name] = f"{ratio}\n{'TCP loss' if config.get('loss') == 'tcp' else 'Joint loss'}"
+        size = config.get("size", "large").capitalize()
+        if directory == str(DATASET.relative_to(ROOT)):
+            group = "3:1"
+        elif "fallback" in directory:
+            group = "2:1"
+        else:
+            group = size
+        loss_label = "TCP loss" if config.get("loss") == "tcp" else "Joint loss"
+        labels[name] = f"{group}\n{loss_label}"
     summaries = evaluate(names)
     args.output, args.settle_time, args.timeout = REPORT, .25, 10.0
     measurements = evaluate_webots(args, names) if args.webots else []
@@ -615,7 +622,7 @@ def compare_models(args, names):
         write_csv(REPORT / "webots_summary.csv", measured_summary)
 
     def endpoint_plot(rows, filename, title):
-        fig, axes = plt.subplots(2, 2, figsize=(13, 8))
+        fig, axes = plt.subplots(2, 2, figsize=(17, 9))
         colors = ["#2878b5" if configs[name].get("loss") == "tcp" else "#e07a3f" for name in names]
         for i, robot in enumerate(ROBOTS):
             for j, kind in enumerate(("reachable", "unreachable")):
@@ -623,7 +630,7 @@ def compare_models(args, names):
                 values = [next(r["requested_tcp_rmse_mm"] for r in rows if r["robot"] == robot and r["kind"] == kind and r["model"] == name) for name in names]
                 bars = ax.bar(range(len(names)), values, color=colors)
                 ax.bar_label(bars, fmt="%.2f", padding=3, fontsize=9)
-                ax.set_xticks(range(len(names)), [labels[n] for n in names], fontsize=9)
+                ax.set_xticks(range(len(names)), [labels[n] for n in names], fontsize=8)
                 ax.set_title(f"{robot.upper()}: {kind} requests")
                 ax.set_ylabel("Requested-point TCP RMSE (mm)")
                 ax.set_ylim(0, max(values) * 1.2)
@@ -635,7 +642,7 @@ def compare_models(args, names):
         fig.savefig(REPORT / filename, dpi=160)
         plt.close(fig)
 
-    endpoint_plot(summaries, "test_comparison.png", "Same test requests: original, 2:1 and 3:1 models")
+    endpoint_plot(summaries, "test_comparison.png", "Same held-out requests: small, medium and large models")
     if measured_summary:
         endpoint_plot(measured_summary, "webots_comparison.png", "Measured in Webots: same 10 reachable + 20 unreachable requests per arm/model")
     new_names = [n for n in names if configs[n].get("splits_dir") == str(DATASET.relative_to(ROOT))]
@@ -671,7 +678,10 @@ def compare_models(args, names):
     fig.tight_layout(rect=(0, .05, 1, .94))
     fig.savefig(REPORT / "training_loss.png", dpi=160)
     plt.close(fig)
-    lines = ["# 20,000 total training rows per robot: joint loss versus TCP loss", "",
+    lines = ["# Small, medium and large models on the same test requests", "",
+        "All models below are evaluated on the exact same held-out points: 1,000 reachable and 1,000 unreachable requests per robot. Small and medium checkpoints were trained on reachable data only. The original large checkpoints were also trained on reachable data only; 2:1 denotes the prior fallback experiment, and 3:1 denotes 15,000 reachable plus 5,000 unreachable training examples per robot (20,000 total). The comparison reports requested-point TCP error, so it does not depend on different fallback labels.", "",
+        "Small and medium model scores are a baseline for generalisation beyond their reachable-only training workspace. Only the two new 3:1 models have loss curves in this report. The Webots measurements previously recorded in this folder cover the five large models, not the small and medium checkpoints.", "",
+        "## 3:1 training details", "",
         "Training per robot: 15,000 reachable + 5,000 certified unreachable requests (3:1). Validation: 3,750 + 1,250. Test: 1,000 + 1,000, identical requested inputs to the previous fallback experiments. Both new models use the same 5→64→64→3 ReLU architecture, seed 2026, Adam, batch 32, cosine learning-rate schedule, 3,000-epoch maximum and patience 300. Best checkpoints are chosen by validation only.", "",
         "Joint loss learns the normalised joint label. TCP loss learns the corresponding desired endpoint through the robot-specific differentiable FK, plus the existing joint-limit penalty. For unreachable requests the desired endpoint is the accepted fallback pose, while the network input remains the requested point. The original TCP datasets have no fallback targets and retain their original requested-point objective.", "",
         "The held-out inputs are identical across models. Earlier datasets differ in both row count and reachable-pose-bank size, so the 3:1 versus 2:1 comparison does not isolate ratio alone.", "",

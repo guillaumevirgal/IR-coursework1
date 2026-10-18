@@ -1,4 +1,12 @@
 {
+  "models/mlp_ned_scara_small_h64x64_cosine.json": "1b5de63979903265c05afd95f40cfb253019d0fb00343982af1c40259a6b14e0",
+  "models/mlp_ned_scara_small_h64x64_cosine.npz": "f44aa1dab2e72888c93cbf85e1c2f592096f2226aa12e09b023ea980086a9218",
+  "models/mlp_ned_scara_small_h64x64_cosine_tcp.json": "59b91f6b6338ec10af1295c2960132c695b940d3f17c4f84bd662a2a25aa07dc",
+  "models/mlp_ned_scara_small_h64x64_cosine_tcp.npz": "9dbd165cc3b5b4b005c9a315ae8bbd047d4bd04005c684d54c83bf4d6fac05ef",
+  "models/mlp_ned_scara_medium_h64x64_cosine.json": "69c83a92e8a59cd6050ad313078fdbc34da913872ea602f823ed9b81f5379c49",
+  "models/mlp_ned_scara_medium_h64x64_cosine.npz": "95ab814b10e625231344ae1f63efe091547cc0fd984aead3e694b65c3d944fa4",
+  "models/mlp_ned_scara_medium_h64x64_cosine_tcp.json": "91611e413b9ec188a8d52c29ffba02d29537b5cb30a46d1add6a69d7da016814",
+  "models/mlp_ned_scara_medium_h64x64_cosine_tcp.npz": "aeeff7b658a5b75d81cb739d168e3a3d4fe757ae2cecf45fd3127ead20200da3",
   "models/mlp_ned_scara_large_h64x64_cosine.json": "1a6d0da99fad20826c9a9a9f66df77d29dbcbfad5c0ea7de2f355579505a411c",
   "models/mlp_ned_scara_large_h64x64_cosine.npz": "c2ac0c58c7f5623731f01604d7465e3373f7cfe06a0526d1d83156732ba811e2",
   "models/mlp_ned_scara_large_h64x64_cosine_tcp.json": "18054d084cbfccc1e7f528db6635946a4c33c7f3d204ed7ed786a7d729f3a588",
