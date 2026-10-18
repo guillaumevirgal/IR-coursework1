@@ -50,15 +50,20 @@ def tcp_and_jacobian(robot, joints):
     return positions, jacobian
 
 
-def tcp_loss_and_gradient(q_norm, x_raw, joint_limits, limit_weight=0.01):
+def tcp_loss_and_gradient(q_norm, x_raw, joint_limits, limit_weight=0.01, target_xyz=None):
     """Mean squared TCP distance (m²) plus a joint-limit penalty.
 
     The penalty is limit_weight * mean(sum((raw - clipped)**2)); its weight
     has units m² per squared normalised joint unit. It supplies a gradient
     where clipping makes the TCP gradient zero. No joint labels are used.
+    target_xyz optionally supplies reachable fallback endpoints while x_raw
+    keeps the requested position and robot flags used as network inputs.
     """
     q_norm = np.asarray(q_norm)
     x_raw = np.asarray(x_raw)
+    targets = x_raw[:, 2:5] if target_xyz is None else np.asarray(target_xyz)
+    if targets.shape != (len(q_norm), 3) or not np.all(np.isfinite(targets)):
+        raise ValueError("TCP targets must be finite XYZ rows matching the batch")
     flags = x_raw[:, :2]
     if not np.all((flags == 0.0) | (flags == 1.0)) or not np.all(flags.sum(axis=1) == 1.0):
         raise ValueError("Expected one-hot [is_scara, is_ned] robot flags")
@@ -77,7 +82,7 @@ def tcp_loss_and_gradient(q_norm, x_raw, joint_limits, limit_weight=0.01):
         half_range = (limits[:, 1] - limits[:, 0]) / 2.0
         physical_q = limits[:, 0] + (clipped[mask] + 1.0) * half_range
         positions, jacobian = tcp_and_jacobian(robot, physical_q)
-        error = positions - x_raw[mask, 2:5]
+        error = positions - targets[mask]
         loss += float(np.sum(error ** 2) / count)
         d_physical = (2.0 / count) * np.einsum("bij,bi->bj", jacobian, error)
         clip_gradient = (q_norm[mask] > -1.0) & (q_norm[mask] < 1.0)

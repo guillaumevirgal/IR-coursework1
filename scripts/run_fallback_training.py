@@ -286,14 +286,14 @@ def predict(name, robot, rows):
     return model.predict((array(rows, INPUTS) - mean) / std)
 
 
-def evaluate():
+def evaluate(model_names=None):
     summaries, predictions = [], []
     for robot in ROBOTS:
         rows = read_csv(DATASET / robot / "test.csv")
         x = array(rows, INPUTS)
         labels = array(rows, OUTPUTS)
         desired = array(rows, ("desired_x", "desired_y", "desired_z"))
-        for model_name in (BASELINE, MODEL):
+        for model_name in (model_names or (BASELINE, MODEL)):
             raw = predict(model_name, robot, rows)
             joints = denormalise(np.clip(raw, -1, 1), JOINT_LIMITS[robot])
             positions = tcp_and_jacobian(robot, joints)[0]
@@ -326,19 +326,19 @@ def evaluate():
     write_csv(REPORT / "test_summary.csv", summaries)
     write_csv(REPORT / "test_predictions.csv", predictions)
     failures = [max((r for r in predictions if r["robot"] == robot and r["kind"] == "unreachable"
-                     and r["model"] == MODEL), key=lambda r: r["desired_tcp_error_mm"])
-                for robot in ROBOTS]
+                     and r["model"] == model), key=lambda r: r["desired_tcp_error_mm"])
+                for robot in ROBOTS for model in (model_names or (MODEL,))]
     write_csv(REPORT / "failure_examples.csv", failures)
     return summaries
 
 
-def evaluate_webots(args):
+def evaluate_webots(args, model_names=None):
     measurements = []
     for robot in ROBOTS:
         rows = read_csv(DATASET / robot / "test.csv")
         selected = [r for r in rows if r["kind"] == "reachable"][:10]
         selected += [r for r in rows if r["kind"] == "unreachable"][:20]
-        for model_name in (BASELINE, MODEL):
+        for model_name in (model_names or (BASELINE, MODEL)):
             cases = [{"label": f"case_{i}", "kind": row["kind"],
                       "point": tuple(float(row[a]) for a in "xyz")} for i, row in enumerate(selected)]
             measured = run_webots(robot, model_name, cases, args)
@@ -582,6 +582,122 @@ def compare_sizes(reference_dataset):
             destination.write(link)
 
 
+def compare_models(args, names):
+    """Evaluate explicit checkpoints on this dataset, without training or selection."""
+    from scripts.tcp_loss import tcp_loss_and_gradient
+    os.environ.setdefault("MPLCONFIGDIR", "/tmp/fallback-training-mpl")
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    configs = {name: json.loads((ROOT / f"models/{name}.json").read_text()) for name in names}
+    labels = {}
+    for name, config in configs.items():
+        directory = config.get("splits_dir", "data/nn/splits")
+        ratio = "3:1" if directory == str(DATASET.relative_to(ROOT)) else ("2:1" if "fallback" in directory else "Reachable only")
+        labels[name] = f"{ratio}\n{'TCP loss' if config.get('loss') == 'tcp' else 'Joint loss'}"
+    summaries = evaluate(names)
+    args.output, args.settle_time, args.timeout = REPORT, .25, 10.0
+    measurements = evaluate_webots(args, names) if args.webots else []
+    measured_summary = []
+    for robot in ROBOTS:
+        for name in names:
+            for kind in ("reachable", "unreachable"):
+                rows = [r for r in measurements if r["robot"] == robot and r["model"] == name and r["kind"] == kind]
+                if not rows:
+                    continue
+                errors = np.array([float(r["webots_error_mm"]) for r in rows])
+                measured_summary.append({"robot": robot, "model": name, "kind": kind, "samples": len(rows),
+                    "settled": sum(str(r["settled"]) in ("True", "1", "true") for r in rows),
+                    "requested_tcp_rmse_mm": float(np.sqrt(np.mean(errors ** 2))),
+                    "requested_tcp_mean_mm": float(errors.mean())})
+    if measured_summary:
+        write_csv(REPORT / "webots_summary.csv", measured_summary)
+
+    def endpoint_plot(rows, filename, title):
+        fig, axes = plt.subplots(2, 2, figsize=(13, 8))
+        colors = ["#2878b5" if configs[name].get("loss") == "tcp" else "#e07a3f" for name in names]
+        for i, robot in enumerate(ROBOTS):
+            for j, kind in enumerate(("reachable", "unreachable")):
+                ax = axes[i, j]
+                values = [next(r["requested_tcp_rmse_mm"] for r in rows if r["robot"] == robot and r["kind"] == kind and r["model"] == name) for name in names]
+                bars = ax.bar(range(len(names)), values, color=colors)
+                ax.bar_label(bars, fmt="%.2f", padding=3, fontsize=9)
+                ax.set_xticks(range(len(names)), [labels[n] for n in names], fontsize=9)
+                ax.set_title(f"{robot.upper()}: {kind} requests")
+                ax.set_ylabel("Requested-point TCP RMSE (mm)")
+                ax.set_ylim(0, max(values) * 1.2)
+                ax.grid(axis="y", alpha=.2)
+                ax.set_axisbelow(True)
+        fig.suptitle(title)
+        fig.text(.5, .015, "Lower is better. Unreachable requests include an unavoidable geometric gap. Orange: joint loss; blue: TCP loss.", ha="center", fontsize=9)
+        fig.tight_layout(rect=(0, .04, 1, .95))
+        fig.savefig(REPORT / filename, dpi=160)
+        plt.close(fig)
+
+    endpoint_plot(summaries, "test_comparison.png", "Same test requests: previous models versus 20,000-row training datasets")
+    if measured_summary:
+        endpoint_plot(measured_summary, "webots_comparison.png", "Measured in Webots: same 10 reachable + 20 unreachable requests per arm/model")
+    new_names = [n for n in names if configs[n].get("splits_dir") == str(DATASET.relative_to(ROOT))]
+    fig, axes = plt.subplots(1, len(new_names), figsize=(7 * len(new_names), 4.5), squeeze=False)
+    for ax, name in zip(axes[0], new_names):
+        config = configs[name]
+        history = read_csv(ROOT / f"models/{name}_history.csv")
+        keys = ("train_loss_m2", "val_loss_m2") if config["loss"] == "tcp" else ("train_mse", "val_mse")
+        epochs = [int(r["epoch"]) for r in history]
+        ax.plot(epochs, [float(r[keys[0]]) for r in history], color="#2878b5", label="Training")
+        ax.plot(epochs, [float(r[keys[1]]) for r in history], color="#e07a3f", label="Validation")
+        heldout = 0.0
+        for robot in ROBOTS:
+            rows = read_csv(DATASET / robot / "test.csv")
+            for kind, weight in (("reachable", .75), ("unreachable", .25)):
+                subset = [r for r in rows if r["kind"] == kind]
+                prediction = predict(name, robot, subset)
+                if config["loss"] == "tcp":
+                    objective = tcp_loss_and_gradient(prediction, array(subset, INPUTS), JOINT_LIMITS,
+                        config["tcp_limit_weight"], array(subset, ("desired_x", "desired_y", "desired_z")))[0]
+                else:
+                    objective = float(np.mean((prediction - array(subset, OUTPUTS)) ** 2))
+                heldout += .5 * weight * objective
+        ax.scatter([config["best_epoch"]], [heldout], s=70, color="#33995c", marker="D", label="Test (one saved checkpoint)", zorder=5)
+        ax.axvline(config["best_epoch"], color="#777777", alpha=.4)
+        ax.set_title(labels[name].replace("\n", " · "))
+        ax.set_xlabel("Epoch")
+        ax.set_ylabel("TCP objective (m², includes limit penalty)" if config["loss"] == "tcp" else "Joint MSE (normalised units²)")
+        ax.set_yscale("log")
+        ax.legend(fontsize=8)
+    fig.suptitle("Training, validation and test: different losses have different units")
+    fig.text(.5, .01, "Raw epoch curves. Test loss is weighted 75% reachable / 25% unreachable to match validation. Test did not select the checkpoint.", ha="center", fontsize=9)
+    fig.tight_layout(rect=(0, .05, 1, .94))
+    fig.savefig(REPORT / "training_loss.png", dpi=160)
+    plt.close(fig)
+    lines = ["# 20,000 total training rows per robot: joint loss versus TCP loss", "",
+        "Training per robot: 15,000 reachable + 5,000 certified unreachable requests (3:1). Validation: 3,750 + 1,250. Test: 1,000 + 1,000, identical requested inputs to the previous fallback experiments. Both new models use the same 5→64→64→3 ReLU architecture, seed 2026, Adam, batch 32, cosine learning-rate schedule, 3,000-epoch maximum and patience 300. Best checkpoints are chosen by validation only.", "",
+        "Joint loss learns the normalised joint label. TCP loss learns the corresponding desired endpoint through the robot-specific differentiable FK, plus the existing joint-limit penalty. For unreachable requests the desired endpoint is the accepted fallback pose, while the network input remains the requested point. The original TCP datasets have no fallback targets and retain their original requested-point objective.", "",
+        "![Endpoint RMSE on all test requests](test_comparison.png)", "",
+        "| Robot | Requests | Training / loss | Requested TCP RMSE (mm) | Mean error (mm) | Fallback TCP RMSE (mm) |",
+        "|---|---|---|---:|---:|---:|"]
+    for r in summaries:
+        lines.append(f"| {r['robot']} | {r['kind']} | {labels[r['model']].replace(chr(10), ' / ')} | {r['requested_tcp_rmse_mm']:.2f} | {r['requested_tcp_mean_mm']:.2f} | {r['desired_tcp_rmse_mm']:.2f} |")
+    lines += ["", "Requested-point RMSE is the main endpoint metric. Unreachable requests include an unavoidable geometric gap. Fallback error measures imitation of the chosen desired endpoint. FK test results are calculated from clipped model commands; Webots results below are measured after settling. Bank size, data quantity and ratio change together compared with previous models, so this is not an isolated test of the ratio.", "",
+        "![Training, validation and test losses](training_loss.png)", "",
+        "| New model | Best epoch | Training stopped at epoch | Best validation objective |",
+        "|---|---:|---:|---:|"]
+    for name in new_names:
+        history = read_csv(ROOT / f"models/{name}_history.csv")
+        lines.append(f"| {labels[name].replace(chr(10), ' / ')} | {configs[name]['best_epoch']} | {history[-1]['epoch']} | {configs[name]['best_val_loss']:.8g} |")
+    if measured_summary:
+        lines += ["", "![Measured endpoint error](webots_comparison.png)", "",
+            "Webots uses the same first 10 reachable and 20 unreachable requests per robot/model. It requires sensors within tolerance for 0.25 simulated seconds, with a 10-second timeout. `webots_summary.csv` retains settling counts; `webots_predictions.csv` retains every measurement."]
+    lines += ["", "In Webots select controller `mlp_ik` and use the robot argument followed by one of:", "", "```text"]
+    lines += [f"--model={name}" for name in new_names]
+    lines += ["```", "", "Reproduce this saved-checkpoint comparison:", "", "```bash",
+        f"python scripts/run_fallback_training.py --name {args.name} --evaluate-models " + " ".join(names), "```",
+        "Add `--webots PATH` to include the simulator measurements. Existing models are never retrained by this command."]
+    (REPORT / "README.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (REPORT / "model_provenance.json").write_text(json.dumps(fingerprint([ROOT / f"models/{n}.{ext}" for n in names for ext in ("json", "npz")]), indent=2), encoding="utf-8")
+
+
 def main():
     global BASELINE, MODEL, ORIGINAL, DATASET, AUDIT, REPORT
     parser = argparse.ArgumentParser(description=__doc__)
@@ -598,6 +714,7 @@ def main():
     parser.add_argument("--reachable-audits", type=Path, default=ROOT / "data/raw",
                         help="folder containing the matching robot_master_audit.csv files")
     parser.add_argument("--dataset-only", action="store_true", help="create and audit data without training a model")
+    parser.add_argument("--evaluate-models", nargs="+", help="compare named saved checkpoints on an existing experiment dataset")
     args = parser.parse_args()
     ORIGINAL = args.reachable_splits.resolve()
     args.reachable_audits = args.reachable_audits.resolve()
@@ -616,6 +733,14 @@ def main():
         parser.error("train-extra must be >= 4; test-extra >= 2; epochs >= 1; seed >= 0")
     if args.webots:
         args.webots = find_webots(args.webots)
+    if args.evaluate_models:
+        if args.dataset_only:
+            parser.error("evaluate-models cannot be combined with dataset-only")
+        if not (DATASET / "manifest.json").is_file():
+            parser.error("evaluate-models needs an existing dataset for --name")
+        REPORT.mkdir(exist_ok=True, parents=True)
+        compare_models(args, args.evaluate_models)
+        return
     for path in (DATASET, AUDIT, REPORT, *(ROOT / f"models/{MODEL}{suffix}" for suffix in (".npz", ".json", "_history.csv"))):
         if path.exists():
             raise FileExistsError(f"Refusing to overwrite experiment output: {path}")

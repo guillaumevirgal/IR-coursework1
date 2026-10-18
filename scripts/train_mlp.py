@@ -191,6 +191,22 @@ def main():
     x_train_raw, y_train = load_split(args.robots, "train", args.size, args.splits_dir)
     x_val_raw, y_val = load_split(args.robots, "validation", args.size, args.splits_dir)
 
+    def tcp_targets(kind, raw_inputs):
+        targets = []
+        for robot in args.robots:
+            with (args.splits_dir / robot / f"{kind}_{args.size}.csv").open(newline="", encoding="utf-8") as source:
+                for row in csv.DictReader(source):
+                    fields = ("desired_x", "desired_y", "desired_z")
+                    fields = fields if all(key in row for key in fields) else ("x", "y", "z")
+                    targets.append([float(row[key]) for key in fields])
+        targets = np.asarray(targets)
+        if targets.shape != (len(raw_inputs), 3) or not np.all(np.isfinite(targets)):
+            raise ValueError("Invalid TCP target rows")
+        return targets
+
+    train_tcp_targets = tcp_targets("train", x_train_raw)
+    val_tcp_targets = tcp_targets("validation", x_val_raw)
+
     # Standardise x, y, z with training statistics only; keep the flags 0/1.
     mean = np.zeros(len(INPUTS))
     std = np.ones(len(INPUTS))
@@ -205,10 +221,10 @@ def main():
     loss_label = "joint MSE" if args.loss == "joints" else "TCP objective (m², includes limit penalty)"
     print(f"Training with {loss_label}", flush=True)
 
-    def objective(prediction, labels, raw_inputs):
+    def objective(prediction, labels, raw_inputs, target_xyz):
         if args.loss == "tcp":
             return tcp_loss_and_gradient(prediction, raw_inputs, JOINT_LIMITS,
-                                         args.tcp_limit_weight)[0]
+                                         args.tcp_limit_weight, target_xyz)[0]
         return float(np.mean((prediction - labels) ** 2))
 
     for epoch in range(1, args.epochs + 1):
@@ -219,11 +235,11 @@ def main():
             loss_fn = None
             if args.loss == "tcp":
                 loss_fn = lambda prediction: tcp_loss_and_gradient(
-                    prediction, x_train_raw[batch], JOINT_LIMITS, args.tcp_limit_weight)
+                    prediction, x_train_raw[batch], JOINT_LIMITS, args.tcp_limit_weight, train_tcp_targets[batch])
             model.train_batch(x_train[batch], y_train[batch], lr, loss_fn=loss_fn)
 
-        train_loss = objective(model.predict(x_train), y_train, x_train_raw)
-        val_loss = objective(model.predict(x_val), y_val, x_val_raw)
+        train_loss = objective(model.predict(x_train), y_train, x_train_raw, train_tcp_targets)
+        val_loss = objective(model.predict(x_val), y_val, x_val_raw, val_tcp_targets)
         history.append((epoch, lr, train_loss, val_loss))
 
         if val_loss < best["val_loss"]:
@@ -278,6 +294,7 @@ def main():
         dataset_path = args.splits_dir.resolve()
         dataset_path = dataset_path.relative_to(ROOT) if dataset_path.is_relative_to(ROOT) else dataset_path
         metadata = {**vars(args), "splits_dir": dataset_path.as_posix(), "best_epoch": best["epoch"], "best_val_loss": best["val_loss"],
+                    "training_tcp_target": "desired policy TCP when present, otherwise requested TCP",
                     "validation_tcp_target": "desired policy TCP" if has_policy_targets else "requested TCP",
                     "validation_fk_metrics": validation_metrics}
         if args.loss == "joints":
