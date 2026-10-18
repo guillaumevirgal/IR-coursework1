@@ -45,7 +45,7 @@ def prepare_audit(path, robot, seed):
     path.parent.mkdir(parents=True, exist_ok=True)
     if not path.exists():
         with path.open("w", newline="", encoding="utf-8") as csv_file:
-            csv.writer(csv_file).writerow(CSV_FIELDS)
+            csv.writer(csv_file, lineterminator="\n").writerow(CSV_FIELDS)
         return 0, 0
 
     # A killed process may leave a final, incomplete CSV line. Discard only
@@ -63,7 +63,7 @@ def prepare_audit(path, robot, seed):
             legacy_rows = list(reader)
             temporary_path = path.with_suffix(path.suffix + ".resume.tmp")
             with temporary_path.open("w", newline="", encoding="utf-8") as upgraded:
-                writer = csv.writer(upgraded)
+                writer = csv.writer(upgraded, lineterminator="\n")
                 writer.writerow(CSV_FIELDS)
                 for row in legacy_rows:
                     writer.writerow((robot, seed, *(row[field] for field in LEGACY_AUDIT_FIELDS)))
@@ -101,7 +101,7 @@ def append_audit_row(path, robot, seed, attempt, pose, expected, actual, error, 
     with path.open("a", newline="", encoding="utf-8") as csv_file:
         accepted = reason == ""
         actual_values = actual if actual is not None else ("", "", "")
-        csv.writer(csv_file).writerow((
+        csv.writer(csv_file, lineterminator="\n").writerow((
             robot, seed, attempt, int(accepted), reason, *pose, *expected, *actual_values,
             error if error is not None else "",
         ))
@@ -124,7 +124,7 @@ def build_nn_dataset(audit_path, nn_path, robot, joint_limits, accepted_limit=No
             "w", newline="", encoding="utf-8"
         ) as destination:
             reader = csv.DictReader(source)
-            writer = csv.writer(destination)
+            writer = csv.writer(destination, lineterminator="\n")
             writer.writerow(NN_FIELDS)
             accepted_count = 0
             for row in reader:

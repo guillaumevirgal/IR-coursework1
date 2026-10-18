@@ -50,6 +50,18 @@ def fingerprint(paths):
             for p in paths}
 
 
+def reproduction_options(args):
+    options = (f"--size {args.size} --name {args.name}_repeat --seed {args.seed} "
+               f"--train-extra {args.train_extra} --test-extra {args.test_extra} --epochs {args.epochs}")
+    for flag, path in (("--reachable-splits", ORIGINAL), ("--reachable-audits", args.reachable_audits)):
+        options += f' {flag} "{os.path.relpath(path, ROOT)}"'
+    if args.test_requests:
+        options += f' --test-requests "{args.test_requests}"'
+    if args.dataset_only:
+        options += " --dataset-only"
+    return options
+
+
 def array(rows, fields):
     return np.asarray([[float(r[key]) for key in fields] for r in rows])
 
@@ -183,14 +195,14 @@ def build_dataset(args):
         # Ensure the conservative certificate does not reject any known valid pose.
         if np.max(certificate.lower_bound(reference_xyz)) > 1e-8:
             raise AssertionError("Workspace certificate rejected a recorded reachable pose")
-        original_audit = read_csv(ROOT / f"data/raw/{robot}_master_audit.csv")
+        original_audit = read_csv(args.reachable_audits / f"{robot}_master_audit.csv")
         accepted = {tuple(float(row[f"e{axis}"]) for axis in "xyz"): (line, row)
                     for line, row in enumerate(original_audit, start=2) if row["accepted"] == "1"}
         audit_rows = []
         counts = {}
         seen = set()
         for split_index, (split, extra_count) in enumerate((
-                (f"train_{args.size}", args.train_extra), (f"validation_{args.size}", args.train_extra // 4),
+                (f"train_{args.size}", args.train_extra), (f"validation_{args.size}", (args.train_extra + 2) // 4),
                 ("test", args.test_extra))):
             original_rows = read_csv(ORIGINAL / robot / f"{split}.csv")
             rows = [{**row, "kind": "reachable", **{f"desired_{a}": row[a] for a in "xyz"}}
@@ -465,7 +477,7 @@ def draw_report(summaries, measurements, manifest, args):
             lines.append(f"| {row['robot']} | {row['kind']} | {label(row['model'])} | {row['samples']} | {row['settled']} | {row['requested_tcp_rmse_mm']:.2f} | {row['desired_tcp_rmse_mm']:.2f} |")
     lines += ["", "## Training loss", "", "![Training, validation and test joint MSE](training_loss.png)", "",
         "The test marker is reweighted to validation group proportions (2 reachable to 1 unreachable in this run); the test files have an equal group mix. Per-group endpoint metrics above are unweighted. Curves are 25-epoch moving averages.", "",
-        "## Run and use", "", f"Run `python scripts/run_fallback_training.py --size {args.size} --name {args.name}_repeat" + (f" --test-requests {args.test_requests}" if args.test_requests else "") + f"` from the repository root; add `--webots PATH` for physics measurements. Existing paths/checkpoints are refused. Data: `{DATASET.relative_to(ROOT)}`; policy audit: `{AUDIT.relative_to(ROOT)}`. `manifest.json` records dataset hashes and `source_integrity.json` confirms original data and checkpoint hashes.", "",
+        "## Run and use", "", f"Run `python scripts/run_fallback_training.py {reproduction_options(args)}` from the repository root; add `--webots PATH` for physics measurements. Existing paths/checkpoints are refused. Data: `{DATASET.relative_to(ROOT)}`; policy audit: `{AUDIT.relative_to(ROOT)}`. `manifest.json` records dataset hashes and `source_integrity.json` confirms original data and checkpoint hashes.", "",
         f'In Webots keep controller `mlp_ik` and append `"--model={MODEL}"` after `"ned"` or `"scara"` in `controllerArgs`. The network supplies the learned fallback response.', ""]
     (REPORT / "README.md").write_text("\n".join(lines), encoding="utf-8")
 
@@ -571,26 +583,37 @@ def compare_sizes(reference_dataset):
 
 
 def main():
-    global BASELINE, MODEL, DATASET, AUDIT, REPORT
+    global BASELINE, MODEL, ORIGINAL, DATASET, AUDIT, REPORT
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--size", choices=("small", "medium", "large"), default="large")
     parser.add_argument("--name", help="unique experiment name; defaults to directional_fallback (plus size for medium/small)")
     parser.add_argument("--seed", type=int, default=2026)
-    parser.add_argument("--train-extra", type=int, help="unreachable training rows per arm; default is half the original training count")
+    parser.add_argument("--train-extra", type=int, help="unreachable training rows per arm; validation adds a quarter of this, rounded to the nearest integer")
     parser.add_argument("--test-requests", type=Path, help="reuse only unreachable test inputs from another experiment, with fresh labels")
     parser.add_argument("--test-extra", type=int, default=1000)
     parser.add_argument("--epochs", type=int, default=3000)
     parser.add_argument("--webots", type=Path)
+    parser.add_argument("--reachable-splits", type=Path, default=ORIGINAL,
+                        help="parent of robot folders containing reachable train/validation/test CSVs")
+    parser.add_argument("--reachable-audits", type=Path, default=ROOT / "data/raw",
+                        help="folder containing the matching robot_master_audit.csv files")
+    parser.add_argument("--dataset-only", action="store_true", help="create and audit data without training a model")
     args = parser.parse_args()
+    ORIGINAL = args.reachable_splits.resolve()
+    args.reachable_audits = args.reachable_audits.resolve()
     args.name = args.name or ("directional_fallback" if args.size == "large" else f"directional_fallback_{args.size}")
-    args.train_extra = args.train_extra if args.train_extra is not None else {"small": 400, "medium": 2000, "large": 6000}[args.size]
+    if args.train_extra is None:
+        counts = [len(read_csv(ORIGINAL / robot / f"train_{args.size}.csv")) for robot in ROBOTS]
+        if len(set(counts)) != 1:
+            parser.error("reachable training counts differ between robots; specify --train-extra")
+        args.train_extra = counts[0] // 2
     if not re.fullmatch(r"[A-Za-z0-9_-]+", args.name):
         parser.error("name must contain only letters, numbers, underscores or hyphens")
     BASELINE = f"mlp_ned_scara_{args.size}_h64x64_cosine"
     MODEL = BASELINE + "_" + args.name
     DATASET, AUDIT, REPORT = (ROOT / f"data/nn/{args.name}", ROOT / f"data/raw/{args.name}", ROOT / f"reports/{args.name}")
-    if args.train_extra < 4 or args.train_extra % 4 or args.test_extra < 2 or args.epochs < 1 or args.seed < 0:
-        parser.error("train-extra must be a positive multiple of four; test-extra >= 2; epochs >= 1; seed >= 0")
+    if args.train_extra < 4 or args.test_extra < 2 or args.epochs < 1 or args.seed < 0:
+        parser.error("train-extra must be >= 4; test-extra >= 2; epochs >= 1; seed >= 0")
     if args.webots:
         args.webots = find_webots(args.webots)
     for path in (DATASET, AUDIT, REPORT, *(ROOT / f"models/{MODEL}{suffix}" for suffix in (".npz", ".json", "_history.csv"))):
@@ -602,6 +625,18 @@ def main():
     REPORT.mkdir(parents=True)
     try:
         manifest = build_dataset(args)
+        manifest["reachable_splits"] = os.path.relpath(ORIGINAL, ROOT)
+        manifest["reachable_audits"] = os.path.relpath(args.reachable_audits, ROOT)
+        (DATASET / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+        if args.dataset_only:
+            (REPORT / "README.md").write_text(
+                "# Dataset generation only\n\nNo model was trained. See "
+                f"`{DATASET.relative_to(ROOT)}/manifest.json` for counts and provenance.\n\n"
+                "Split counts per robot:\n\n```json\n" + json.dumps(manifest["robots"]["ned"]["counts"], indent=2) + "\n```\n\n"
+                f"Reproduce with a fresh experiment name:\n\n```bash\npython scripts/run_fallback_training.py {reproduction_options(args)}\n```\n",
+                encoding="utf-8")
+            print(f"Dataset created: {DATASET}", flush=True)
+            return
         command = [sys.executable, str(ROOT / "scripts/train_mlp.py"), "--size", args.size, "--hidden", "64", "64",
                    "--loss", "joints", "--epochs", str(args.epochs), "--seed", str(args.seed),
                    "--splits-dir", str(DATASET), "--model-name", MODEL]
