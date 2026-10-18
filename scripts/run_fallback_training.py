@@ -595,10 +595,12 @@ def compare_models(args, names):
     for name, config in configs.items():
         directory = config.get("splits_dir", "data/nn/splits")
         size = config.get("size", "large").capitalize()
-        if directory == str(DATASET.relative_to(ROOT)):
-            group = "3:1"
+        if "directional_fallback_total_" in directory:
+            training_rows = len(read_csv(ROOT / directory / "ned" / f"train_{config.get('size', 'large')}.csv"))
+            group = f"{training_rows // 1000}k · 3:1"
         elif "fallback" in directory:
-            group = "2:1"
+            training_rows = len(read_csv(ROOT / directory / "ned" / f"train_{config.get('size', 'large')}.csv"))
+            group = f"{training_rows // 1000}k · 2:1"
         else:
             group = size
         loss_label = "TCP loss" if config.get("loss") == "tcp" else "Joint loss"
@@ -637,15 +639,15 @@ def compare_models(args, names):
                 ax.grid(axis="y", alpha=.2)
                 ax.set_axisbelow(True)
         fig.suptitle(title)
-        fig.text(.5, .015, "Lower is better. Unreachable requests include an unavoidable geometric gap. Orange: joint loss; blue: TCP loss.", ha="center", fontsize=9)
+        fig.text(.5, .015, "Lower is better. Fallback labels show total training rows in thousands and reachable:unreachable ratio. Unreachable targets have a geometric gap. Orange: joint loss; blue: TCP loss.", ha="center", fontsize=9)
         fig.tight_layout(rect=(0, .04, 1, .95))
         fig.savefig(REPORT / filename, dpi=160)
         plt.close(fig)
 
-    endpoint_plot(summaries, "test_comparison.png", "Same held-out requests: small, medium and large models")
+    endpoint_plot(summaries, "test_comparison.png", "Same held-out requests: dataset size and loss comparison")
     if measured_summary:
         endpoint_plot(measured_summary, "webots_comparison.png", "Measured in Webots: same 10 reachable + 20 unreachable requests per arm/model")
-    new_names = [n for n in names if configs[n].get("splits_dir") == str(DATASET.relative_to(ROOT))]
+    new_names = [n for n in names if "directional_fallback_total_" in configs[n].get("splits_dir", "")]
     fig, axes = plt.subplots(1, len(new_names), figsize=(7 * len(new_names), 4.5), squeeze=False)
     for ax, name in zip(axes[0], new_names):
         config = configs[name]
@@ -678,11 +680,11 @@ def compare_models(args, names):
     fig.tight_layout(rect=(0, .05, 1, .94))
     fig.savefig(REPORT / "training_loss.png", dpi=160)
     plt.close(fig)
-    lines = ["# Small, medium and large models on the same test requests", "",
-        "All models below are evaluated on the exact same held-out points: 1,000 reachable and 1,000 unreachable requests per robot. Small and medium checkpoints were trained on reachable data only. The original large checkpoints were also trained on reachable data only; 2:1 denotes the prior fallback experiment, and 3:1 denotes 15,000 reachable plus 5,000 unreachable training examples per robot (20,000 total). The comparison reports requested-point TCP error, so it does not depend on different fallback labels.", "",
-        "Small and medium model scores are a baseline for generalisation beyond their reachable-only training workspace. Only the two new 3:1 models have loss curves in this report. The Webots measurements previously recorded in this folder cover the five large models, not the small and medium checkpoints.", "",
+    lines = ["# Fallback dataset-size and loss comparison on shared test requests", "",
+        "All models below are evaluated on the exact same held-out points: 1,000 reachable and 1,000 unreachable requests per robot. The original small, medium and large checkpoints were trained on reachable data only. The original large checkpoint used 12,000 training rows from the 16,000-row generated dataset. The new 16k-total models use 12,000 reachable + 4,000 unreachable training rows; the 20k-total models use 15,000 + 5,000. Both use a 3:1 ratio. The earlier 2:1 model uses 12,000 + 6,000 rows. Requested-point TCP RMSE is compared, independent of each experiment's fallback labels.", "",
+        "The 16k and 20k training sets use different reachable pose banks as well as different row counts, so their comparison does not isolate dataset size alone. Small and medium models provide reachable-only baselines. Loss curves for both new total-dataset sizes are included below. Existing Webots measurements in this folder cover the five earlier large models; the newly trained 16k models have not been measured in Webots.", "",
         "## 3:1 training details", "",
-        "Training per robot: 15,000 reachable + 5,000 certified unreachable requests (3:1). Validation: 3,750 + 1,250. Test: 1,000 + 1,000, identical requested inputs to the previous fallback experiments. Both new models use the same 5→64→64→3 ReLU architecture, seed 2026, Adam, batch 32, cosine learning-rate schedule, 3,000-epoch maximum and patience 300. Best checkpoints are chosen by validation only.", "",
+        "For the 20k experiment: training per robot is 15,000 reachable + 5,000 certified unreachable requests (3:1); validation is 3,750 + 1,250. Test: 1,000 + 1,000. The 16k experiment uses 12,000 + 4,000 training and 3,000 + 1,000 validation rows. Both use the same 5→64→64→3 ReLU architecture, seed 2026, Adam, batch 32, cosine learning-rate schedule, 3,000-epoch maximum and patience 300. Best checkpoints are chosen by validation only.", "",
         "Joint loss learns the normalised joint label. TCP loss learns the corresponding desired endpoint through the robot-specific differentiable FK, plus the existing joint-limit penalty. For unreachable requests the desired endpoint is the accepted fallback pose, while the network input remains the requested point. The original TCP datasets have no fallback targets and retain their original requested-point objective.", "",
         "The held-out inputs are identical across models. Earlier datasets differ in both row count and reachable-pose-bank size, so the 3:1 versus 2:1 comparison does not isolate ratio alone.", "",
         "![Endpoint RMSE on all test requests](test_comparison.png)", "",

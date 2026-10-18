@@ -395,6 +395,11 @@ this experiment's 15,000-pose training bank. The earlier
 [20,000-reachable preparation](data/nn/directional_fallback_20000/README.md)
 remains a separate dataset containing 26,667 total training rows per arm.
 
+The [16,000-total 3:1 experiment](reports/directional_fallback_total_16000/README.md)
+uses 12,000 reachable + 4,000 unreachable training rows per arm and includes
+joint-loss and TCP-loss checkpoints. Its results are compared with the 20,000-total
+models on the same held-out requests.
+
 Both new models use the same architecture, seed and optimiser. Joint loss learns
 normalised joint labels. TCP loss uses the robot's FK to compare its predicted
 TCP with `desired_x,desired_y,desired_z` when those columns exist; otherwise it

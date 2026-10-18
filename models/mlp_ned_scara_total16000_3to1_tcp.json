@@ -1,0 +1,42 @@
+{
+  "robots": [
+    "ned",
+    "scara"
+  ],
+  "size": "large",
+  "hidden": [
+    64,
+    64
+  ],
+  "lr": 0.001,
+  "lr_min": 1e-05,
+  "decay": "cosine",
+  "batch": 32,
+  "epochs": 3000,
+  "patience": 300,
+  "seed": 2026,
+  "loss": "tcp",
+  "tcp_limit_weight": 0.01,
+  "splits_dir": "data/nn/directional_fallback_total_16000",
+  "model_name": "mlp_ned_scara_total16000_3to1_tcp",
+  "best_epoch": 520,
+  "best_val_loss": 0.00010855678181914376,
+  "training_tcp_target": "desired policy TCP when present, otherwise requested TCP",
+  "validation_tcp_target": "desired policy TCP",
+  "validation_fk_metrics": {
+    "ned": {
+      "mean_tcp_error_mm": 8.721226890640706,
+      "median_tcp_error_mm": 5.681556706282481,
+      "p95_tcp_error_mm": 24.395644974089713,
+      "max_tcp_error_mm": 160.63662118716766,
+      "rmse_tcp_error_mm": 13.437891903027195
+    },
+    "scara": {
+      "mean_tcp_error_mm": 3.570862514092573,
+      "median_tcp_error_mm": 2.0927166972879196,
+      "p95_tcp_error_mm": 12.244378358722095,
+      "max_tcp_error_mm": 95.38115049096535,
+      "rmse_tcp_error_mm": 5.827423203187522
+    }
+  }
+}
