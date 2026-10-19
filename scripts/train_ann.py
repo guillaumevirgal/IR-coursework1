@@ -1,6 +1,7 @@
 """Train a shared ANN for Ned and SCARA inverse kinematics."""
 
 import json
+import pickle
 from pathlib import Path
 import sys
 
@@ -8,7 +9,6 @@ import numpy as np
 from sklearn.neural_network import MLPRegressor
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
-import joblib
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -76,7 +76,8 @@ metrics = {
     "validation_mae_normalised_joints": mae,
 }
 
-joblib.dump(model, OUTPUT / "ann_model.joblib")
+with (OUTPUT / "ann_model.pkl").open("wb") as file:
+    pickle.dump(model, file)
 
 with open(OUTPUT / "metrics.json", "w", encoding="utf-8") as file:
     json.dump(metrics, file, indent=2)

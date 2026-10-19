@@ -2,15 +2,15 @@
 """Evaluate ANN TCP positioning errors on the medium validation sets."""
 
 import json
+import pickle
 import sys
 from pathlib import Path
 
 import numpy as np
-import joblib
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data" / "nn" / "splits"
-MODEL_PATH = ROOT / "outputs" / "medium_baseline" / "ann_model.joblib"
+MODEL_PATH = ROOT / "outputs" / "medium_baseline" / "ann_model.pkl"
 OUTPUT_PATH = ROOT / "outputs" / "medium_baseline" / "tcp_validation.json"
 
 sys.path.insert(0, str(ROOT))
@@ -46,7 +46,8 @@ def calculate_tcp_positions(joints, fk_function):
     return np.asarray([fk_function(row) for row in joints], dtype=float)
 
 
-model = joblib.load(MODEL_PATH)
+with MODEL_PATH.open("rb") as file:
+    model = pickle.load(file)
 results = {}
 
 for robot in ["ned", "scara"]:

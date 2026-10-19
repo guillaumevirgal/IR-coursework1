@@ -19,7 +19,6 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.spatial import cKDTree
 
 DATA = ROOT / "data" / "nn" / "splits"
 MODELS = ROOT / "models"
@@ -37,6 +36,7 @@ from scripts.webots_mlp_runner import (  # noqa: E402
     write_cases, make_diagnostic_world, remove_world, run_webots,
 )
 from scripts.train_mlp import MLP, denormalise  # noqa: E402
+from scripts.numpy_neighbors import NumpyNearestNeighbors as cKDTree  # noqa: E402
 from scripts.forward_kinematics_ned import forward_kinematics_ned  # noqa: E402
 from scripts.forward_kinematics_scara import forward_kinematics_scara  # noqa: E402
 

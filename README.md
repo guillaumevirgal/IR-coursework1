@@ -69,7 +69,7 @@ IR-coursework1/
 
 ## 1. Install
 
-Create or activate a virtual environment, then run the installer with that environment's Python. It reads `requirements.txt` and installs NumPy and Matplotlib into that interpreter.
+Create or activate a virtual environment, then run the installer with that environment's Python. The executable coursework workflows use Python's standard library and NumPy; the requirements also include scikit-learn for the separate legacy ANN comparison and Matplotlib for figures. The coursework brief allows any plotting libraries for scripts used only to produce figures.
 
 ```bash
 python -m venv .venv

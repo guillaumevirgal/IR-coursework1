@@ -18,11 +18,11 @@ import subprocess
 import sys
 
 import numpy as np
-from scipy.spatial import cKDTree
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from scripts.train_mlp import INPUTS, OUTPUTS, JOINT_LIMITS, denormalise
+from scripts.numpy_neighbors import NumpyNearestNeighbors as cKDTree
 from scripts.tcp_loss import tcp_and_jacobian
 from scripts import forward_kinematics_ned as ned
 from scripts import forward_kinematics_scara as scara
