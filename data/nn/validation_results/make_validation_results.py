@@ -53,7 +53,7 @@ def read_history(name):
 
 def load_model(name, config):
     hidden = config["hidden"] if isinstance(config["hidden"], list) else [config["hidden"]]
-    model = MLP((len(INPUTS), *hidden, len(OUTPUTS)), np.random.default_rng(0))
+    model = MLP((len(INPUTS), *hidden, len(OUTPUTS)), np.random.default_rng(0), activation=config.get("activation") or "relu")
     stored = np.load(MODELS / f"{name}.npz")
     model.params = {key: stored[key] for key in model.params}
     return model, stored["mean"], stored["std"], hidden

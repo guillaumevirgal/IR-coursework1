@@ -22,7 +22,7 @@ from scripts.forward_kinematics_scara import forward_kinematics_scara
 from scripts.train_mlp import INPUTS, JOINT_LIMITS, MLP, MODELS, OUTPUTS, denormalise
 
 
-DEFAULT_MODEL = "mlp_ned_scara_large_h64x64_cosine"
+DEFAULT_MODEL = "mlp_ned_scara_large_h64x64x64x64_cosine_tanh"  # Task 4.A large model
 COMMAND_PERIOD = 0.05  # s
 PRINT_PERIOD = 0.5  # s
 TARGET_STEP = 0.002  # m per simulation step; hold a key to keep moving
@@ -64,7 +64,9 @@ class SharedMLPIK:
         if robot_name not in config["robots"]:
             raise ValueError(f"Model {model_name} was not trained on {robot_name}")
         hidden = config["hidden"] if isinstance(config["hidden"], list) else [config["hidden"]]
-        self.model = MLP((len(INPUTS), *hidden, len(OUTPUTS)), np.random.default_rng(0))
+        # Models saved before the activation option existed were ReLU.
+        activation = config.get("activation") or "relu"
+        self.model = MLP((len(INPUTS), *hidden, len(OUTPUTS)), np.random.default_rng(0), activation=activation)
         with np.load(MODELS / f"{model_name}.npz") as stored:
             self.model.params = {key: stored[key] for key in self.model.params}
             self.mean = stored["mean"]

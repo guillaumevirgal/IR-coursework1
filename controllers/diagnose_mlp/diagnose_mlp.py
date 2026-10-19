@@ -40,7 +40,7 @@ def load_model(name, robot):
     if robot not in config["robots"]:
         raise ValueError(f"Model {name} was not trained on {robot}")
     hidden = config["hidden"] if isinstance(config["hidden"], list) else [config["hidden"]]
-    model = MLP((len(INPUTS), *hidden, len(OUTPUTS)), np.random.default_rng(0))
+    model = MLP((len(INPUTS), *hidden, len(OUTPUTS)), np.random.default_rng(0), activation=config.get("activation") or "relu")
     with np.load(weights_path) as stored:
         model.params = {key: stored[key] for key in model.params}
         mean, std = stored["mean"], stored["std"]

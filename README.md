@@ -22,8 +22,15 @@ IR-coursework1/
 │   ├── forward_kinematics_ned.py       # Task 1.B Ned FK
 │   ├── forward_kinematics_scara.py     # Task 1.B SCARA FK
 │   ├── generate_mlp_diagnostics.py     # Headless MLP prediction diagnostics
+│   ├── train_mlp.py                    # Task 3: shared NumPy MLP trainer
+│   ├── evaluate_configurations.py      # Task 4.A: test every saved model, write CSVs
+│   ├── evaluate_configurations_webots.py  # Task 4.B: first 100 test points measured in Webots
+│   ├── webots_mlp_runner.py            # Headless Webots launcher used by Task 4.B
+│   ├── plot_configuration_results.py   # Graphs from the Task 4.A and 4.B results
 │   ├── run_fk_precision.sh             # Run Task 1.C for both arms
 │   └── plot_fk_precision.py             # Summarise Task 1.C measurements
+├── models/                              # Checkpoints (.npz), configs (.json), loss histories (.csv)
+├── reports/configuration_evaluation/    # Task 4.A results, figures and findings
 └── data/
     ├── raw/                             # Full audit rows, accepted and rejected
     ├── nn/                              # Normalised master data and splits
@@ -61,7 +68,7 @@ Opening either world runs `controllers/mlp_ik/mlp_ik.py`, the shared trained
 network controller. The world passes `ned` or `scara` so the controller uses
 the matching input flag, joint limits, motors, and forward-kinematics check.
 Both worlds include a reachable target sphere. The controller loads
-`mlp_ned_scara_large_h64x64_cosine` by default; to select another model, add
+`mlp_ned_scara_large_h64x64x64x64_cosine_tanh` (the Task 4.A large model) by default; to select another model, add
 `"--model=MODEL_NAME"` to that world's `controllerArgs` list.
 
 While the simulation is running, use the arrow keys to move the red target
@@ -77,7 +84,7 @@ Webots. Webots and the trained model weights (`models/<model>.npz`) are
 required. If the weights are not present, train the default model first:
 
 ```bash
-python scripts/train_mlp.py --size large --hidden 64 64
+python scripts/train_mlp.py --size large --hidden 64 64 64 64 --activation tanh
 ```
 
 Then run diagnostics:
@@ -266,3 +273,101 @@ The existing Task 1.C controller compares FK with Webots for both arms. Run
 `scripts/run_fk_precision.sh` and summarise its measurements with
 `scripts/plot_fk_precision.py`. These measurements check the FK model; they are
 separate from the Task 4 ANN evaluation.
+
+## Task 3: train the MLP
+
+`scripts/train_mlp.py` trains one shared NumPy network for both arms. The input
+is `[is_scara, is_ned, x, y, z]` (x, y, z standardised with training-set
+statistics) and the output is the three normalised joints `q1, q2, q3`. For a
+given size it combines the Ned and SCARA training sets, and keeps the epoch with
+the lowest MSE on the combined validation set. The test sets are never read.
+
+```bash
+python scripts/train_mlp.py --size large --hidden 64 64 64 64 --activation tanh
+python scripts/train_mlp.py --size large --hidden 64 64 64 64 --activation per-robot
+```
+
+| Option | Default | Meaning |
+|---|---|---|
+| `--size` | `small` | `small`, `medium` or `large` training/validation sets |
+| `--hidden` | `64 64` | Units per hidden layer, one number per layer |
+| `--activation` | `relu` | `relu`, `tanh`, or `per-robot` (tanh for Ned rows, ReLU for SCARA rows) |
+| `--lr`, `--lr-min`, `--decay` | `1e-3`, `1e-5`, `cosine` | Adam learning rate and its cosine decay (`--decay none` keeps it fixed) |
+| `--epochs`, `--patience`, `--batch`, `--seed` | `3000`, `300`, `32`, `2026` | Training length, early-stopping patience, batch size, seed |
+
+`per-robot` is still a single network with shared weights. Each hidden unit
+computes `is_ned * tanh(z) + is_scara * relu(z)`, so the arm flag already in the
+input chooses the non-linearity.
+
+Each run writes `models/<name>.npz` (weights and input standardisation),
+`<name>.json` (settings and best validation MSE) and `<name>_history.csv`
+(train and validation MSE per epoch). The name encodes the settings, for example
+`mlp_ned_scara_large_h64x64x64x64_cosine_tanh`. The Webots controller and the
+evaluation scripts read the activation from the `.json`.
+
+## Task 4.A: evaluate every configuration
+
+```bash
+python scripts/evaluate_configurations.py
+python scripts/plot_configuration_results.py   # figures only; needs matplotlib
+```
+
+The evaluation script finds every model under `models/` and runs the handout's
+Task 4.A procedure on the full test set of each arm. It feeds
+`(x, y, z)_true` to the model, clips the predicted joints to [-1, 1] as the
+controller does, de-normalises them and applies the Task 1.B FK, then compares
+`(x, y, z)_pred` with `(x, y, z)_true`:
+
+- position error: Euclidean distance in mm;
+- revolute joints: `atan2(sin(θ_true − θ_pred), cos(θ_true − θ_pred))` in rad;
+- prismatic joint (SCARA shaft): `(d_true − d_pred)²` in m².
+
+For each dataset size it selects the model with the lowest validation MSE on
+the normalised joints (the training loss, `best_val_mse` in each model's `.json`).
+Those three models are the Task 4.A models. The validation TCP error is reported
+in `summary.csv` for reference only. Outputs
+go to `reports/configuration_evaluation/`:
+
+| File | Contents |
+|---|---|
+| `task4a_position.csv` | The 6 position-error sets (3 models × 2 arms): mean, std, median, P95, max |
+| `task4a_joints.csv` | The 18 joint-error sets (3 models × 2 arms × 3 joints): mean, std, mean absolute |
+| `summary.csv` | Every model: settings, validation scores, test position and joint errors |
+| `architecture_by_size.csv` | Mean test position error for each architecture and dataset size |
+| `results.json` | Everything above, plus error quantiles and downsampled learning curves |
+| `figures/*.png` | Graphs made by `plot_configuration_results.py` |
+
+## Task 4.B: measure the same models in Webots
+
+```bash
+python scripts/evaluate_configurations_webots.py
+python scripts/plot_configuration_results.py   # adds the 4.A vs 4.B graph
+```
+
+Run it after `evaluate_configurations.py`, which chooses the three models. The
+script takes the first 100 rows of each arm's `test.csv`, in file order, and runs
+each model in headless Webots. It uses temporary copies of the worlds with the
+`diagnose_mlp` controller, so the original worlds are not modified. The controller
+commands the predicted joints (clipped and de-normalised as in `mlp_ik`), waits for
+the joints to settle, and reads the TCP from the Supervisor. Outputs in
+`reports/configuration_evaluation/`:
+
+| File | Contents |
+|---|---|
+| `task4b_position.csv` | The 6 position-error sets: Webots mean, std, median, P95, max and settled count, with the FK error on the same 100 points and the 4.A full-test result |
+| `task4b_measurements.csv` | Every target, raw and commanded joints, sensed joints, FK TCP and Webots TCP |
+| `test_sets/<robot>_test_first100.csv` | The two reduced test sets |
+
+| Option | Effect |
+|---|---|
+| `--models NAME ...` | Also measure other models (file stems), e.g. the per-robot ones |
+| `--only` | Measure only the `--models` list |
+| `--webots PATH` | Webots launcher, if it is not found on `PATH` or `WEBOTS_HOME` |
+| `--settle-time`, `--timeout` | Settling window and per-target limit, in simulated seconds |
+
+Webots starts controllers with the first `python3` on `PATH`. The script puts the
+interpreter that runs it first, so run it with the Python that has NumPy (your
+`.venv`). The snap version of Webots cannot use that interpreter, so use a
+standard Webots install.
+
+`reports/configuration_evaluation/README.md` summarises the findings.

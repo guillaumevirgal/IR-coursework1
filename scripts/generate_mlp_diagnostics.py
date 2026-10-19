@@ -25,7 +25,7 @@ from scipy.spatial import cKDTree
 
 DATA = ROOT / "data" / "nn" / "splits"
 MODELS = ROOT / "models"
-DEFAULT_MODEL = "mlp_ned_scara_large_h64x64_cosine"
+DEFAULT_MODEL = "mlp_ned_scara_large_h64x64x64x64_cosine_tanh"  # same default as controllers/mlp_ik
 JOINT_LIMITS = {
     "ned": ((-2.8, 2.8), (-0.8, 0.8), (0.0, 1.3)),
     "scara": ((-0.73, 0.73), (0.0, 0.83), (-0.2, 0.0)),
@@ -72,7 +72,7 @@ def load_model(name, robot):
     if robot not in config["robots"]:
         raise ValueError(f"Model {name} was not trained on {robot}")
     hidden = config["hidden"] if isinstance(config["hidden"], list) else [config["hidden"]]
-    model = MLP((len(INPUTS), *hidden, len(JOINT_NAMES)), np.random.default_rng(0))
+    model = MLP((len(INPUTS), *hidden, len(JOINT_NAMES)), np.random.default_rng(0), activation=config.get("activation") or "relu")
     with np.load(weights_path) as stored:
         model.params = {key: stored[key] for key in model.params}
         mean, std = stored["mean"], stored["std"]

@@ -62,7 +62,12 @@ def load_split(robots, kind, size):
 
 
 class MLP:
-    """Fully connected ReLU hidden layers, linear output, trained with Adam."""
+    """Fully connected hidden layers, linear output, trained with Adam.
+
+    activation: "relu", "tanh", or "per-robot". "per-robot" keeps one shared
+    network but picks each row's hidden non-linearity from its arm flag:
+    h = is_ned * tanh(z) + is_scara * relu(z).
+    """
 
     def __init__(self, sizes, rng, activation="relu"):
         # sizes = (n_in, *hidden, n_out). He initialisation suits ReLU layers;
@@ -71,7 +76,8 @@ class MLP:
         self.n_layers = len(sizes) - 1
         self.activation = activation
         for index, (n_from, n_to) in enumerate(zip(sizes[:-1], sizes[1:]), start=1):
-            gain = 1.0 if (index == self.n_layers or self.activation == "tanh") else 2.0
+            # Xavier (gain 1) for tanh, per-robot (tanh-led) and the output layer; He (gain 2) for ReLU.
+            gain = 2.0 if (index < self.n_layers and self.activation == "relu") else 1.0
             self.params[f"W{index}"] = rng.normal(0.0, math.sqrt(gain / n_from), (n_from, n_to))
             self.params[f"b{index}"] = np.zeros(n_to)
         self.m = {key: np.zeros_like(value) for key, value in self.params.items()}
@@ -83,16 +89,27 @@ class MLP:
 
         cache = []
         activation = x
+        self.is_ned = x[:, 1:2]  # flag column; standardisation leaves flags as 0/1
         for index in range(1, self.n_layers + 1):
             pre = activation @ self.params[f"W{index}"] + self.params[f"b{index}"]
             cache.append((activation, pre))
-            if index == self.n_layers:
-                activation = pre  # Keep output linear
-            elif self.activation == "tanh":
-                activation = np.tanh(pre)
-            else:
-                activation = np.maximum(pre, 0.0)
+            activation = pre if index == self.n_layers else self.hidden_activation(pre)  # linear output
         return activation, cache
+
+    def hidden_activation(self, pre):
+        if self.activation == "tanh":
+            return np.tanh(pre)
+        if self.activation == "per-robot":
+            return self.is_ned * np.tanh(pre) + (1.0 - self.is_ned) * np.maximum(pre, 0.0)
+        return np.maximum(pre, 0.0)
+
+    def hidden_derivative(self, pre):
+        if self.activation == "tanh":
+            return 1.0 - np.tanh(pre) ** 2
+        relu = (pre > 0.0).astype(float)
+        if self.activation == "per-robot":
+            return self.is_ned * (1.0 - np.tanh(pre) ** 2) + (1.0 - self.is_ned) * relu
+        return relu
 
     def predict(self, x):
         return self.forward(x)[0]
@@ -105,7 +122,7 @@ class MLP:
         loss = float(np.mean(error ** 2))
 
         # Gradients of mean((output - y)^2) over all batch elements, walked
-        # back from the linear output layer through each ReLU layer.
+        # back from the linear output layer through each hidden layer.
         grads = {}
         d_pre = 2.0 * error / error.size
         for index in range(self.n_layers, 0, -1):
@@ -113,14 +130,7 @@ class MLP:
             grads[f"W{index}"] = layer_input.T @ d_pre
             grads[f"b{index}"] = d_pre.sum(axis=0)
             if index > 1:
-                prev_pre = cache[index - 2][1]
-
-                if self.activation == "tanh":
-                    derivative = 1.0 - np.tanh(prev_pre) ** 2
-                else:
-                    derivative = (prev_pre > 0.0).astype(float)
-
-                d_pre = (d_pre @ self.params[f"W{index}"].T) * derivative
+                d_pre = (d_pre @ self.params[f"W{index}"].T) * self.hidden_derivative(cache[index - 2][1])
 
         self.step += 1
         for key, grad in grads.items():
@@ -167,7 +177,8 @@ def parse_args():
     parser.add_argument("--epochs", type=int, default=3000)
     parser.add_argument("--patience", type=int, default=300, help="epochs without validation improvement")
     parser.add_argument("--seed", type=int, default=2026)
-    parser.add_argument("--activation", choices=("relu", "tanh"), default="relu", help="hidden layer activation function")
+    parser.add_argument("--activation", choices=("relu", "tanh", "per-robot"), default="relu",
+                        help="hidden activation; per-robot = tanh for Ned rows, ReLU for SCARA rows")
     return parser.parse_args()
 
 
