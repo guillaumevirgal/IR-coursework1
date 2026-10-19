@@ -1,0 +1,63 @@
+{
+  "seed": 2026,
+  "policy": "closest accepted pose within 2 degrees of best recorded request direction",
+  "direction": {
+    "ned": "3D shoulder-to-request direction",
+    "scara": "planar yaw-axis-to-request bearing"
+  },
+  "direction_tolerance_deg": 2.0,
+  "certificate": "65^3 full joint grid with global Jacobian cover bound; analytic sphere/cylinder bounds",
+  "minimum_unreachable_clearance_m": 0.005,
+  "query_offsets_m": [
+    0.015,
+    0.6
+  ],
+  "near_far_split_m": 0.1,
+  "label_bank": "original train_large.csv only; no validation/test poses",
+  "robots": {
+    "ned": {
+      "counts": {
+        "train_large": {
+          "reachable": 12000,
+          "unreachable": 6000
+        },
+        "validation_large": {
+          "reachable": 3000,
+          "unreachable": 1500
+        },
+        "test": {
+          "reachable": 1000,
+          "unreachable": 1000
+        }
+      },
+      "workspace_cover_radius_m": 0.027868747863034712
+    },
+    "scara": {
+      "counts": {
+        "train_large": {
+          "reachable": 12000,
+          "unreachable": 6000
+        },
+        "validation_large": {
+          "reachable": 3000,
+          "unreachable": 1500
+        },
+        "test": {
+          "reachable": 1000,
+          "unreachable": 1000
+        }
+      },
+      "workspace_cover_radius_m": 0.009652940091643058
+    }
+  },
+  "generated_file_sha256": {
+    "data/nn/directional_fallback/ned/test.csv": "d7387fa55397507c4658b2f6080bfe63ba0d6bf8891fc05cae3d5e3ab8997bb6",
+    "data/nn/directional_fallback/ned/train_large.csv": "d6b24f6d8b8bf817fd2dc258374d380118600e71bd6d73623de993e7a352defd",
+    "data/nn/directional_fallback/ned/validation_large.csv": "36b5b976df224862f6856177bed7a25a05e18271346141732b411a664583156d",
+    "data/nn/directional_fallback/scara/test.csv": "a0ca0725df1ac271e4ecd658f4964c5aaacb00fb11941e2751cf7a70f155612f",
+    "data/nn/directional_fallback/scara/train_large.csv": "839f91a8d7251cfffcd9b996ebd5a3149d9e5428512e83d1657fc9ebb8db5768",
+    "data/nn/directional_fallback/scara/validation_large.csv": "199da3fc7212d48a05b67f64a1069647b1ea60975096f8813987b985b74672c0",
+    "data/raw/directional_fallback/ned.csv": "c41f3963424bd71fbc00f4e8c085dc8f1b81603780badcfca426126c6141bd54",
+    "data/raw/directional_fallback/scara.csv": "16112f71d11527aa4b2b6bfd4e281147e2779ca4e089b77ea9c8f622078f0916"
+  }
+}

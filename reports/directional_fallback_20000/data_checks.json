@@ -1,0 +1,47 @@
+{
+  "all_previous_data_and_models_unchanged": true,
+  "robots": {
+    "ned": {
+      "counts": {
+        "train_large": {
+          "reachable": 20000,
+          "unreachable": 6667
+        },
+        "validation_large": {
+          "reachable": 5000,
+          "unreachable": 1667
+        },
+        "test": {
+          "reachable": 1000,
+          "unreachable": 1000
+        }
+      },
+      "no_duplicate_requests_or_split_overlap": true,
+      "same_test_requests_as_previous_experiment": true,
+      "all_fallback_labels_link_to_training_and_accepted_webots_audit": true,
+      "all_unreachable_requests_certified_more_than_5mm_outside_workspace": true,
+      "joint_labels_within_normalised_limits": true
+    },
+    "scara": {
+      "counts": {
+        "train_large": {
+          "reachable": 20000,
+          "unreachable": 6667
+        },
+        "validation_large": {
+          "reachable": 5000,
+          "unreachable": 1667
+        },
+        "test": {
+          "reachable": 1000,
+          "unreachable": 1000
+        }
+      },
+      "no_duplicate_requests_or_split_overlap": true,
+      "same_test_requests_as_previous_experiment": true,
+      "all_fallback_labels_link_to_training_and_accepted_webots_audit": true,
+      "all_unreachable_requests_certified_more_than_5mm_outside_workspace": true,
+      "joint_labels_within_normalised_limits": true
+    }
+  }
+}

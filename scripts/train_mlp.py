@@ -14,6 +14,7 @@ import argparse
 import csv
 import json
 import math
+import re
 import sys
 from pathlib import Path
 
@@ -50,12 +51,12 @@ def denormalise(q_norm, limits):
     return (q_norm + 1.0) / 2.0 * (upper - lower) + lower
 
 
-def load_split(robots, kind, size):
+def load_split(robots, kind, size, directory=SPLITS):
     """Stack the requested robots' CSVs into input and target arrays."""
 
     rows = []
     for robot in robots:
-        path = SPLITS / robot / f"{kind}_{size}.csv"
+        path = Path(directory) / robot / f"{kind}_{size}.csv"
         with path.open(newline="", encoding="utf-8") as source:
             rows.extend(csv.DictReader(source))
     x = np.array([[float(row[name]) for name in INPUTS] for row in rows])
@@ -162,20 +163,49 @@ def parse_args():
                         help="joint-label MSE (baseline) or squared TCP distance through FK")
     parser.add_argument("--tcp-limit-weight", type=float, default=0.01,
                         help="TCP loss joint-limit penalty weight (m² per squared normalised joint unit)")
+    parser.add_argument("--splits-dir", type=Path, default=SPLITS,
+                        help="separate dataset experiment; defaults to the original splits")
+    parser.add_argument("--model-name", help="distinct checkpoint name; refuses to replace existing files")
     args = parser.parse_args()
     if args.epochs < 1 or args.batch < 1 or args.patience < 1:
         parser.error("epochs, batch and patience must be positive")
     if not math.isfinite(args.tcp_limit_weight) or args.tcp_limit_weight < 0:
         parser.error("tcp-limit-weight must be finite and nonnegative")
+    if args.model_name and not re.fullmatch(r"[A-Za-z0-9_-]+", args.model_name):
+        parser.error("model-name must contain only letters, numbers, underscores or hyphens")
+    if args.splits_dir.resolve() != SPLITS.resolve() and not args.model_name:
+        parser.error("a separate splits-dir requires model-name to protect original checkpoints")
     return args
 
 
 def main():
     args = parse_args()
     rng = np.random.default_rng(args.seed)
+    name = args.model_name or f"mlp_{'_'.join(args.robots)}_{args.size}_h{'x'.join(map(str, args.hidden))}_{args.decay}"
+    if args.loss == "tcp" and not args.model_name:
+        name += "_tcp"
+    if args.model_name and any((MODELS / f"{name}{suffix}").exists()
+                               for suffix in (".npz", ".json", "_history.csv")):
+        raise FileExistsError(f"Checkpoint {name} already exists; choose a new model-name")
 
-    x_train_raw, y_train = load_split(args.robots, "train", args.size)
-    x_val_raw, y_val = load_split(args.robots, "validation", args.size)
+    x_train_raw, y_train = load_split(args.robots, "train", args.size, args.splits_dir)
+    x_val_raw, y_val = load_split(args.robots, "validation", args.size, args.splits_dir)
+
+    def tcp_targets(kind, raw_inputs):
+        targets = []
+        for robot in args.robots:
+            with (args.splits_dir / robot / f"{kind}_{args.size}.csv").open(newline="", encoding="utf-8") as source:
+                for row in csv.DictReader(source):
+                    fields = ("desired_x", "desired_y", "desired_z")
+                    fields = fields if all(key in row for key in fields) else ("x", "y", "z")
+                    targets.append([float(row[key]) for key in fields])
+        targets = np.asarray(targets)
+        if targets.shape != (len(raw_inputs), 3) or not np.all(np.isfinite(targets)):
+            raise ValueError("Invalid TCP target rows")
+        return targets
+
+    train_tcp_targets = tcp_targets("train", x_train_raw)
+    val_tcp_targets = tcp_targets("validation", x_val_raw)
 
     # Standardise x, y, z with training statistics only; keep the flags 0/1.
     mean = np.zeros(len(INPUTS))
@@ -191,10 +221,10 @@ def main():
     loss_label = "joint MSE" if args.loss == "joints" else "TCP objective (m², includes limit penalty)"
     print(f"Training with {loss_label}", flush=True)
 
-    def objective(prediction, labels, raw_inputs):
+    def objective(prediction, labels, raw_inputs, target_xyz):
         if args.loss == "tcp":
             return tcp_loss_and_gradient(prediction, raw_inputs, JOINT_LIMITS,
-                                         args.tcp_limit_weight)[0]
+                                         args.tcp_limit_weight, target_xyz)[0]
         return float(np.mean((prediction - labels) ** 2))
 
     for epoch in range(1, args.epochs + 1):
@@ -205,11 +235,11 @@ def main():
             loss_fn = None
             if args.loss == "tcp":
                 loss_fn = lambda prediction: tcp_loss_and_gradient(
-                    prediction, x_train_raw[batch], JOINT_LIMITS, args.tcp_limit_weight)
+                    prediction, x_train_raw[batch], JOINT_LIMITS, args.tcp_limit_weight, train_tcp_targets[batch])
             model.train_batch(x_train[batch], y_train[batch], lr, loss_fn=loss_fn)
 
-        train_loss = objective(model.predict(x_train), y_train, x_train_raw)
-        val_loss = objective(model.predict(x_val), y_val, x_val_raw)
+        train_loss = objective(model.predict(x_train), y_train, x_train_raw, train_tcp_targets)
+        val_loss = objective(model.predict(x_val), y_val, x_val_raw, val_tcp_targets)
         history.append((epoch, lr, train_loss, val_loss))
 
         if val_loss < best["val_loss"]:
@@ -228,8 +258,21 @@ def main():
     q_val = model.predict(x_val)
     print(f"\nBest validation {loss_label}: {best['val_loss']:.8f} at epoch {best['epoch']}")
     validation_metrics = {}
+    # A fallback dataset's requested XYZ can be unreachable. Its desired TCP
+    # is stored explicitly, so its unavoidable request gap is not model error.
+    metric_inputs = x_val_raw.copy()
+    offset = 0
+    has_policy_targets = False
     for robot in args.robots:
-        errors = position_errors(x_val_raw, q_val, [robot])
+        with (args.splits_dir / robot / f"validation_{args.size}.csv").open(newline="", encoding="utf-8") as source:
+            rows = list(csv.DictReader(source))
+        if rows and all(key in rows[0] for key in ("desired_x", "desired_y", "desired_z")):
+            metric_inputs[offset:offset + len(rows), 2:5] = [
+                [float(row[f"desired_{axis}"]) for axis in "xyz"] for row in rows]
+            has_policy_targets = True
+        offset += len(rows)
+    for robot in args.robots:
+        errors = position_errors(metric_inputs, q_val, [robot])
         validation_metrics[robot] = {
             "mean_tcp_error_mm": float(errors.mean() * 1000),
             "median_tcp_error_mm": float(np.median(errors) * 1000),
@@ -237,21 +280,22 @@ def main():
             "max_tcp_error_mm": float(errors.max() * 1000),
             "rmse_tcp_error_mm": float(np.sqrt(np.mean(errors ** 2)) * 1000),
         }
-        print(f"{robot}: validation position error {errors.mean() * 1000:.2f} "
+        print(f"{robot}: validation {'desired TCP' if has_policy_targets else 'position'} error {errors.mean() * 1000:.2f} "
               f"± {errors.std() * 1000:.2f} mm (n={len(errors)})")
 
-    name = f"mlp_{'_'.join(args.robots)}_{args.size}_h{'x'.join(map(str, args.hidden))}_{args.decay}"
-    if args.loss == "tcp":
-        name += "_tcp"
     MODELS.mkdir(exist_ok=True)
     np.savez(MODELS / f"{name}.npz", mean=mean, std=std, **model.params)
     with (MODELS / f"{name}_history.csv").open("w", newline="", encoding="utf-8") as destination:
-        writer = csv.writer(destination)
+        writer = csv.writer(destination, lineterminator="\n")
         columns = ("train_mse", "val_mse") if args.loss == "joints" else ("train_loss_m2", "val_loss_m2")
         writer.writerow(("epoch", "lr", *columns))
         writer.writerows(history)
     with (MODELS / f"{name}.json").open("w", encoding="utf-8") as destination:
-        metadata = {**vars(args), "best_epoch": best["epoch"], "best_val_loss": best["val_loss"],
+        dataset_path = args.splits_dir.resolve()
+        dataset_path = dataset_path.relative_to(ROOT) if dataset_path.is_relative_to(ROOT) else dataset_path
+        metadata = {**vars(args), "splits_dir": dataset_path.as_posix(), "best_epoch": best["epoch"], "best_val_loss": best["val_loss"],
+                    "training_tcp_target": "desired policy TCP when present, otherwise requested TCP",
+                    "validation_tcp_target": "desired policy TCP" if has_policy_targets else "requested TCP",
                     "validation_fk_metrics": validation_metrics}
         if args.loss == "joints":
             metadata["best_val_mse"] = best["val_loss"]

@@ -1,0 +1,67 @@
+{
+  "seed": 2026,
+  "size": "large",
+  "policy": "closest accepted pose within 2 degrees of best recorded request direction",
+  "direction": {
+    "ned": "3D shoulder-to-request direction",
+    "scara": "planar yaw-axis-to-request bearing"
+  },
+  "direction_tolerance_deg": 2.0,
+  "certificate": "65^3 full joint grid with global Jacobian cover bound; analytic sphere/cylinder bounds",
+  "minimum_unreachable_clearance_m": 0.005,
+  "query_offsets_m": [
+    0.015,
+    0.6
+  ],
+  "near_far_split_m": 0.1,
+  "label_bank": "original train_large.csv only; no validation/test poses",
+  "shared_test_requests": "data/nn/directional_fallback_total_20000",
+  "robots": {
+    "ned": {
+      "counts": {
+        "train_large": {
+          "reachable": 12000,
+          "unreachable": 4000
+        },
+        "validation_large": {
+          "reachable": 3000,
+          "unreachable": 1000
+        },
+        "test": {
+          "reachable": 1000,
+          "unreachable": 1000
+        }
+      },
+      "workspace_cover_radius_m": 0.027868747863034712
+    },
+    "scara": {
+      "counts": {
+        "train_large": {
+          "reachable": 12000,
+          "unreachable": 4000
+        },
+        "validation_large": {
+          "reachable": 3000,
+          "unreachable": 1000
+        },
+        "test": {
+          "reachable": 1000,
+          "unreachable": 1000
+        }
+      },
+      "workspace_cover_radius_m": 0.009652940091643058
+    }
+  },
+  "generated_file_sha256": {
+    "data/nn/directional_fallback_total_16000/ned/test.csv": "d7387fa55397507c4658b2f6080bfe63ba0d6bf8891fc05cae3d5e3ab8997bb6",
+    "data/nn/directional_fallback_total_16000/ned/train_large.csv": "781a97fdb1e4d1d2e69614935d8a41ec20d6521fb827fb248c84feec04639fdf",
+    "data/nn/directional_fallback_total_16000/ned/validation_large.csv": "8fee2ae76630eb9d7bec09557662f0e45b7b7a950ce066583bdc33d62dfe07c9",
+    "data/nn/directional_fallback_total_16000/scara/test.csv": "a0ca0725df1ac271e4ecd658f4964c5aaacb00fb11941e2751cf7a70f155612f",
+    "data/nn/directional_fallback_total_16000/scara/train_large.csv": "99c537ca18a72675ae2656d286a0ffbb5d283d8eb90e2ebc0c6dfbdd4b227106",
+    "data/nn/directional_fallback_total_16000/scara/validation_large.csv": "1701986e0f82af79d7f51da1a3fb6f2bffef9dcfe2eccff90e95890c0555462d",
+    "data/raw/directional_fallback_total_16000/ned.csv": "2fbeda056abbab599d3aed3faa9ce23335004354b8c23065e0cdda88f10ed09b",
+    "data/raw/directional_fallback_total_16000/scara.csv": "082ef0474948434c6eba1ff37d3654b062d4a3ca49869619c7afba0c00bfa739"
+  },
+  "reachable_splits": "data/nn/splits",
+  "reachable_audits": "data/raw"
+}

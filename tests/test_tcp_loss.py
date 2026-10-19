@@ -85,6 +85,26 @@ class TCPLossTests(unittest.TestCase):
                     numerical[index] = (plus - minus) / 2e-6
                 np.testing.assert_allclose(model.m[key] / 0.1, numerical, rtol=1e-5, atol=1e-9)
 
+    def test_fallback_targets_replace_unreachable_request_in_loss_and_gradient(self):
+        q = np.array([[0.2, -0.3, 0.4], [-0.4, 0.1, 0.2]])
+        inputs = np.array([[1, 0, 2.0, 2.0, 2.0], [0, 1, -2.0, 2.0, 2.0]])
+        targets = np.array([FORWARD_KINEMATICS[robot](denormalise(row, JOINT_LIMITS[robot]))
+                            for robot, row in zip(("scara", "ned"), q)])
+        loss, gradient = tcp_loss_and_gradient(q, inputs, JOINT_LIMITS, target_xyz=targets)
+        self.assertLess(loss, 1e-28)
+        np.testing.assert_allclose(gradient, 0, atol=1e-14)
+        self.assertGreater(tcp_loss_and_gradient(q, inputs, JOINT_LIMITS)[0], 1)
+        targets += np.array([.01, -.02, .03])
+        _, analytical = tcp_loss_and_gradient(q, inputs, JOINT_LIMITS, target_xyz=targets)
+        numerical = np.zeros_like(q)
+        for index in np.ndindex(q.shape):
+            plus, minus = q.copy(), q.copy()
+            plus[index] += 1e-6
+            minus[index] -= 1e-6
+            numerical[index] = (tcp_loss_and_gradient(plus, inputs, JOINT_LIMITS, target_xyz=targets)[0]
+                                - tcp_loss_and_gradient(minus, inputs, JOINT_LIMITS, target_xyz=targets)[0]) / 2e-6
+        np.testing.assert_allclose(analytical, numerical, rtol=1e-6, atol=1e-9)
+
 
 if __name__ == "__main__":
     unittest.main()

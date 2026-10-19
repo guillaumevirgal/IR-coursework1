@@ -62,6 +62,8 @@ def parse_args():
     parser.add_argument("seed", nargs="?", type=int, default=2026)
     parser.add_argument("output", nargs="?", type=Path)
     parser.add_argument("--webots", type=Path, help="path to webots or webots.exe")
+    parser.add_argument("--splits-root", type=Path, default=ROOT / "data/nn/splits",
+                        help="parent of robot split folders; use a new path for independent datasets")
     parser.add_argument("--small", type=int, default=1000, help="small dataset size before 80/20 split")
     parser.add_argument("--medium", type=int, default=5000, help="medium dataset size before 80/20 split")
     parser.add_argument("--large", type=int, default=15000, help="large dataset size before 80/20 split")
@@ -72,7 +74,7 @@ def parse_args():
 def write_dataset(path, rows):
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as destination:
-        writer = csv.DictWriter(destination, fieldnames=NN_FIELDS)
+        writer = csv.DictWriter(destination, fieldnames=NN_FIELDS, lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
 
@@ -195,7 +197,7 @@ def main():
         if args.output:
             nn_path = raw_path.with_name(f"{raw_path.stem.removesuffix('_audit')}_nn.csv")
         nn_path = nn_path.resolve()
-        split_dir = ROOT / "data" / "nn" / "splits" / robot
+        split_dir = args.splits_root.resolve() / robot
         if not raw_path.exists() and (nn_path.exists() or split_dir.exists()):
             raise FileExistsError(
                 f"Found derived outputs without their raw audit for {robot}; "

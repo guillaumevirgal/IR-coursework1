@@ -1,0 +1,33 @@
+Training with joint MSE
+epoch     1  lr 1.0e-03  train loss 0.04201966  val loss 0.04165496
+epoch   100  lr 1.0e-03  train loss 0.00511622  val loss 0.00526715
+epoch   200  lr 9.9e-04  train loss 0.00446922  val loss 0.00463743
+epoch   300  lr 9.8e-04  train loss 0.00387792  val loss 0.00427137
+epoch   400  lr 9.6e-04  train loss 0.00429869  val loss 0.00493172
+epoch   500  lr 9.3e-04  train loss 0.00383984  val loss 0.00394944
+epoch   600  lr 9.1e-04  train loss 0.00376257  val loss 0.00441398
+epoch   700  lr 8.7e-04  train loss 0.00388617  val loss 0.00421932
+epoch   800  lr 8.4e-04  train loss 0.00368353  val loss 0.00435451
+epoch   900  lr 8.0e-04  train loss 0.00333483  val loss 0.00397100
+epoch  1000  lr 7.5e-04  train loss 0.00338848  val loss 0.00427344
+epoch  1100  lr 7.1e-04  train loss 0.00323929  val loss 0.00386040
+epoch  1200  lr 6.6e-04  train loss 0.00308953  val loss 0.00393256
+epoch  1300  lr 6.1e-04  train loss 0.00325637  val loss 0.00392149
+epoch  1400  lr 5.6e-04  train loss 0.00321307  val loss 0.00415247
+epoch  1500  lr 5.1e-04  train loss 0.00304815  val loss 0.00380482
+epoch  1600  lr 4.5e-04  train loss 0.00303136  val loss 0.00368739
+epoch  1700  lr 4.0e-04  train loss 0.00287192  val loss 0.00357760
+epoch  1800  lr 3.5e-04  train loss 0.00292502  val loss 0.00359144
+epoch  1900  lr 3.0e-04  train loss 0.00278947  val loss 0.00346769
+epoch  2000  lr 2.6e-04  train loss 0.00267193  val loss 0.00348317
+epoch  2100  lr 2.1e-04  train loss 0.00281788  val loss 0.00397951
+epoch  2200  lr 1.7e-04  train loss 0.00257066  val loss 0.00354267
+epoch  2300  lr 1.4e-04  train loss 0.00255071  val loss 0.00356604
+epoch  2400  lr 1.0e-04  train loss 0.00251070  val loss 0.00342951
+epoch  2500  lr 7.6e-05  train loss 0.00250083  val loss 0.00350466
+Early stop at epoch 2580; best epoch 2280
+
+Best validation joint MSE: 0.00338556 at epoch 2280
+ned: validation desired TCP error 11.24 ± 19.36 mm (n=4500)
+scara: validation desired TCP error 4.42 ± 5.40 mm (n=4500)
+Saved /workspace/IR-coursework1/models/mlp_ned_scara_large_h64x64_cosine_directional_fallback.npz

@@ -1,0 +1,6 @@
+{
+  "models/mlp_ned_scara_large_h64x64_cosine.json": "1a6d0da99fad20826c9a9a9f66df77d29dbcbfad5c0ea7de2f355579505a411c",
+  "models/mlp_ned_scara_large_h64x64_cosine.npz": "c2ac0c58c7f5623731f01604d7465e3373f7cfe06a0526d1d83156732ba811e2",
+  "models/mlp_ned_scara_large_h64x64_cosine_directional_fallback.json": "17f9c5667f56d3e5fbb9d5b73c2f71bccd54c31193723193cc3df1415c720ec7",
+  "models/mlp_ned_scara_large_h64x64_cosine_directional_fallback.npz": "7ba087eb9ec41cdb5eb6b0077bbe9a258ac610b12719245a13b7af471804dd9c"
+}

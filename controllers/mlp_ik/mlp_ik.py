@@ -8,6 +8,7 @@ joint ranges for that robot.
 import argparse
 import json
 import math
+import shlex
 import sys
 from pathlib import Path
 
@@ -52,7 +53,14 @@ def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("robot", choices=ROBOTS)
     parser.add_argument("--model", default=DEFAULT_MODEL, help="model name from models/")
-    return parser.parse_args()
+    arguments = sys.argv[1:]
+    # Webots' GUI controller-argument field can pass the complete text as one
+    # argv item, unlike the world's controllerArgs MFString, which passes one
+    # item per entry. Accept both forms so a pasted line such as
+    # "ned --model=..." works in either place.
+    if len(arguments) == 1 and any(char.isspace() for char in arguments[0]):
+        arguments = shlex.split(arguments[0])
+    return parser.parse_args(arguments)
 
 
 class SharedMLPIK:

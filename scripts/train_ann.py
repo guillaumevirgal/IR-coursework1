@@ -1,17 +1,19 @@
 """Train a shared ANN for Ned and SCARA inverse kinematics."""
 
 import json
+import pickle
 from pathlib import Path
+import sys
 
 import numpy as np
-import pandas as pd
 from sklearn.neural_network import MLPRegressor
-from sklearn.metrics import mean_squared_error
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
-import joblib
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from scripts.ann_data import load_inputs_targets
+
 DATA = ROOT / "data" / "nn" / "splits"
 OUTPUT = ROOT / "outputs" / "medium_baseline"
 OUTPUT.mkdir(parents=True, exist_ok=True)
@@ -21,18 +23,18 @@ TARGETS = ["q1", "q2", "q3"]
 
 
 def load_split(split_name):
-    ned = pd.read_csv(DATA / "ned" / f"{split_name}_medium.csv")
-    scara = pd.read_csv(DATA / "scara" / f"{split_name}_medium.csv")
-    return pd.concat([ned, scara], ignore_index=True)
+    arrays = [
+        load_inputs_targets(DATA / robot / f"{split_name}_medium.csv", INPUTS, TARGETS)
+        for robot in ("ned", "scara")
+    ]
+    return (
+        np.concatenate([inputs for inputs, _ in arrays], axis=0),
+        np.concatenate([targets for _, targets in arrays], axis=0),
+    )
 
 
-train = load_split("train")
-validation = load_split("validation")
-
-X_train = train[INPUTS].to_numpy()
-y_train = train[TARGETS].to_numpy()
-X_val = validation[INPUTS].to_numpy()
-y_val = validation[TARGETS].to_numpy()
+X_train, y_train = load_split("train")
+X_val, y_val = load_split("validation")
 
 model = Pipeline([
     ("scaler", StandardScaler()),
@@ -55,7 +57,7 @@ print("Training ANN...")
 model.fit(X_train, y_train)
 
 predictions = model.predict(X_val)
-mse = mean_squared_error(y_val, predictions)
+mse = float(np.mean((y_val - predictions) ** 2))
 rmse = float(np.sqrt(mse))
 mae = float(np.mean(np.abs(y_val - predictions)))
 
@@ -74,7 +76,8 @@ metrics = {
     "validation_mae_normalised_joints": mae,
 }
 
-joblib.dump(model, OUTPUT / "ann_model.joblib")
+with (OUTPUT / "ann_model.pkl").open("wb") as file:
+    pickle.dump(model, file)
 
 with open(OUTPUT / "metrics.json", "w", encoding="utf-8") as file:
     json.dump(metrics, file, indent=2)

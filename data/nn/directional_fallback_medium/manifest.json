@@ -1,0 +1,65 @@
+{
+  "seed": 2026,
+  "size": "medium",
+  "policy": "closest accepted pose within 2 degrees of best recorded request direction",
+  "direction": {
+    "ned": "3D shoulder-to-request direction",
+    "scara": "planar yaw-axis-to-request bearing"
+  },
+  "direction_tolerance_deg": 2.0,
+  "certificate": "65^3 full joint grid with global Jacobian cover bound; analytic sphere/cylinder bounds",
+  "minimum_unreachable_clearance_m": 0.005,
+  "query_offsets_m": [
+    0.015,
+    0.6
+  ],
+  "near_far_split_m": 0.1,
+  "label_bank": "original train_medium.csv only; no validation/test poses",
+  "shared_test_requests": "data/nn/directional_fallback",
+  "robots": {
+    "ned": {
+      "counts": {
+        "train_medium": {
+          "reachable": 4000,
+          "unreachable": 2000
+        },
+        "validation_medium": {
+          "reachable": 1000,
+          "unreachable": 500
+        },
+        "test": {
+          "reachable": 1000,
+          "unreachable": 1000
+        }
+      },
+      "workspace_cover_radius_m": 0.027868747863034712
+    },
+    "scara": {
+      "counts": {
+        "train_medium": {
+          "reachable": 4000,
+          "unreachable": 2000
+        },
+        "validation_medium": {
+          "reachable": 1000,
+          "unreachable": 500
+        },
+        "test": {
+          "reachable": 1000,
+          "unreachable": 1000
+        }
+      },
+      "workspace_cover_radius_m": 0.009652940091643058
+    }
+  },
+  "generated_file_sha256": {
+    "data/nn/directional_fallback_medium/ned/test.csv": "62076597a5ada6c7fa7d41dc2089dc15a16c3456a46b10ffdf69338a04269509",
+    "data/nn/directional_fallback_medium/ned/train_medium.csv": "765692f8c65e9205f8695a1d24cfa20cff701074b260edf13a25f995ba3e16e1",
+    "data/nn/directional_fallback_medium/ned/validation_medium.csv": "e62ca4c5f246b081e130db0d0d394ebc8013316adf5999c16af60fa7854046e6",
+    "data/nn/directional_fallback_medium/scara/test.csv": "d8baaf63cb0d40811f73a60f0b7f078c0e38a58d983d759ac7dd98a275cc94c5",
+    "data/nn/directional_fallback_medium/scara/train_medium.csv": "6ab8b39fb36ed99a97fb10f4d167b3b15629a9e7379f5b2e2ad28c30efd46c84",
+    "data/nn/directional_fallback_medium/scara/validation_medium.csv": "0fa3798e6da5ce4023c77c34fdd4197663750094cf8b4786eab7d9b670e3c6bb",
+    "data/raw/directional_fallback_medium/ned.csv": "c3692c7d1a47939a85c79aafa0d16e14fff29d0d655140247428906da00046de",
+    "data/raw/directional_fallback_medium/scara.csv": "bebf326c49cdebd807b53a834cc9cc9d58395760a9f26758b676b1db831cc883"
+  }
+}
