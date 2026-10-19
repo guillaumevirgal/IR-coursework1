@@ -3,12 +3,15 @@
 
 import json
 from pathlib import Path
+import sys
 
 import numpy as np
-import pandas as pd
 import joblib
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from scripts.ann_data import load_inputs_targets
+
 DATA = ROOT / "data" / "nn" / "splits"
 MODEL_PATH = ROOT / "outputs" / "medium_baseline" / "ann_model.joblib"
 OUTPUT_PATH = ROOT / "outputs" / "medium_baseline" / "per_robot_validation.json"
@@ -21,16 +24,13 @@ results = {}
 
 for robot in ["ned", "scara"]:
     path = DATA / robot / "validation_medium.csv"
-    df = pd.read_csv(path)
-
-    X = df[INPUTS].to_numpy()
-    y_true = df[TARGETS].to_numpy()
+    X, y_true = load_inputs_targets(path, INPUTS, TARGETS)
     y_pred = model.predict(X)
 
     errors = y_pred - y_true
 
     results[robot] = {
-        "samples": int(len(df)),
+        "samples": int(len(X)),
         "mse_normalised_joints": float(np.mean(errors**2)),
         "rmse_normalised_joints": float(np.sqrt(np.mean(errors**2))),
         "mae_normalised_joints": float(np.mean(np.abs(errors))),

@@ -6,7 +6,6 @@ import sys
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
 import joblib
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -16,6 +15,7 @@ OUTPUT_PATH = ROOT / "outputs" / "medium_baseline" / "tcp_test.json"
 
 sys.path.insert(0, str(ROOT))
 
+from scripts.ann_data import load_inputs_targets
 from scripts.forward_kinematics_ned import forward_kinematics_ned
 from scripts.forward_kinematics_scara import forward_kinematics_scara
 
@@ -50,10 +50,7 @@ model = joblib.load(MODEL_PATH)
 results = {}
 
 for robot in ["ned", "scara"]:
-    df = pd.read_csv(DATA / robot / "test.csv")
-
-    X = df[INPUTS].to_numpy()
-    y_true_normalised = df[TARGETS].to_numpy()
+    X, y_true_normalised = load_inputs_targets(DATA / robot / "test.csv", INPUTS, TARGETS)
     y_pred_normalised = model.predict(X)
 
     limits = JOINT_LIMITS[robot]
@@ -70,7 +67,7 @@ for robot in ["ned", "scara"]:
     errors_mm = errors_m * 1000.0
 
     results[robot] = {
-        "samples": int(len(df)),
+        "samples": int(len(X)),
         "mean_tcp_error_mm": float(np.mean(errors_mm)),
         "median_tcp_error_mm": float(np.median(errors_mm)),
         "p95_tcp_error_mm": float(np.percentile(errors_mm, 95)),
