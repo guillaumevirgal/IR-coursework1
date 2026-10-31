@@ -21,7 +21,7 @@ Run everything from the repository root. The datasets (`data/`) and trained mode
 | Step | Command | Needs Webots |
 |---|---|---|
 | 1. Generate data | `python scripts/run_dataset_generation.py both 16000 42` | yes |
-| 2. Train | `python scripts/train_mlp.py --size large --hidden 64 64 --loss joints` and `... --loss tcp` | no |
+| 2. Train | `python scripts/train_all_models.py` (all 14 models; or one model: `python scripts/train_mlp.py --size large --hidden 64 64 --loss joints`) | no |
 | 3. Task 4.A (FK evaluation) | `python scripts/compare_mlp_losses.py` | no |
 | 4. Task 4.B (Webots evaluation) | `python scripts/evaluate_mlp_webots.py` | yes |
 | 5. Live control | open `worlds/articulated.wbt` or `worlds/scara.wbt` | yes |
@@ -38,7 +38,7 @@ If Webots is not found automatically, pass `--webots "<path to webots executable
 | 1.B Forward kinematics | `scripts/forward_kinematics_ned.py`, `scripts/forward_kinematics_scara.py` |
 | 1.C FK precision in Webots | `controllers/fk_precision/`, `scripts/run_fk_precision.sh`, `scripts/plot_fk_precision.py` |
 | 2 Dataset generation | `controllers/generate_dataset/`, `controllers/common/dataset_generator.py`, `scripts/run_dataset_generation.py` |
-| 3 Training | `scripts/train_mlp.py`, `scripts/tcp_loss.py` |
+| 3 Training | `scripts/train_mlp.py`, `scripts/train_all_models.py`, `scripts/tcp_loss.py` |
 | 4.A / 4.B Evaluation | `scripts/compare_mlp_losses.py`, `scripts/evaluate_mlp_webots.py`, `scripts/evaluation_common.py`, `controllers/diagnose_mlp/` |
 | Live neural IK | `controllers/mlp_ik/mlp_ik.py` |
 | Shared joint limits and normalisation | `scripts/robot_config.py` |
@@ -84,12 +84,52 @@ python scripts/plot_fk_precision.py  # summarise
 
 ## 3. Train
 
+**Retrain all 14 models with one command** (the exact settings used for the report; seed 2026, 3000 epochs, patience 300, batch 32):
+
 ```bash
-python scripts/train_mlp.py --size large --hidden 64 64 --loss joints
-python scripts/train_mlp.py --size large --hidden 64 64 --loss tcp
+python scripts/train_all_models.py --dry-run     # list the 14 train commands
+python scripts/train_all_models.py               # train all; names get "_repro", shipped models untouched
+python scripts/train_all_models.py --only large  # subset, e.g. only large-data models
 ```
 
-`--size` is `small`, `medium` or `large`. Checkpoints are saved to `models/` (TCP-loss files end in `_tcp`) and never overwrite existing ones. Other options: `--epochs`, `--lr`, `--batch`, `--seed`, `--tcp-limit-weight`, `--splits-dir`, `--model-name`. The test set is never loaded during training.
+It needs only NumPy and the included `data/`. Training all models takes a while; `--only` runs a subset. Checkpoints are never overwritten, so retrained models are saved with the `_repro` suffix (change it with `--suffix`).
+
+The same commands one by one (`train_mlp.py` trains one model per call). To reproduce a shipped name exactly, move the existing `models/<name>.*` away first or pass `--model-name`. The test set is never loaded during training.
+
+Default names are `mlp_ned_scara_<size>_h<hidden>_<decay>` plus `_tcp` for the TCP loss.
+
+**Main models (reachable data, joint loss and TCP loss)**
+
+| Checkpoint | Command |
+|---|---|
+| `mlp_ned_scara_small_h64x64_cosine` | `python scripts/train_mlp.py --size small --hidden 64 64 --loss joints` |
+| `mlp_ned_scara_medium_h64x64_cosine` | `python scripts/train_mlp.py --size medium --hidden 64 64 --loss joints` |
+| `mlp_ned_scara_large_h64x64_cosine` (default live model) | `python scripts/train_mlp.py --size large --hidden 64 64 --loss joints` |
+| `mlp_ned_scara_small_h64x64_cosine_tcp` | `python scripts/train_mlp.py --size small --hidden 64 64 --loss tcp` |
+| `mlp_ned_scara_medium_h64x64_cosine_tcp` | `python scripts/train_mlp.py --size medium --hidden 64 64 --loss tcp` |
+| `mlp_ned_scara_large_h64x64_cosine_tcp` | `python scripts/train_mlp.py --size large --hidden 64 64 --loss tcp` |
+
+**Early architecture and schedule trials (small data, constant learning rate)**
+
+| Checkpoint | Command |
+|---|---|
+| `mlp_ned_scara_small_h64x64` | `python scripts/train_mlp.py --size small --hidden 64 64 --decay none --model-name mlp_ned_scara_small_h64x64` |
+| `mlp_ned_scara_small_h64` | `python scripts/train_mlp.py --size small --hidden 64 --decay none --model-name mlp_ned_scara_small_h64` |
+
+**Unreachable-target experiment** (needs the `data/nn/directional_fallback*` splits, which are included)
+
+| Checkpoint | Command |
+|---|---|
+| `..._large_h64x64_cosine_directional_fallback` | `python scripts/run_fallback_training.py --name directional_fallback_repeat` |
+| `..._medium_h64x64_cosine_directional_fallback_medium` | `python scripts/run_fallback_training.py --size medium --name directional_fallback_medium_repeat --test-requests data/nn/directional_fallback` |
+| `mlp_ned_scara_total20000_3to1_joints` | `python scripts/train_mlp.py --size large --hidden 64 64 --loss joints --splits-dir data/nn/directional_fallback_total_20000 --model-name mlp_ned_scara_total20000_3to1_joints` |
+| `mlp_ned_scara_total20000_3to1_tcp` | same with `--loss tcp` and `--model-name mlp_ned_scara_total20000_3to1_tcp` |
+| `mlp_ned_scara_total16000_3to1_joints` | same as the 20000 joints command with `--splits-dir data/nn/directional_fallback_total_16000` and `--model-name mlp_ned_scara_total16000_3to1_joints` |
+| `mlp_ned_scara_total16000_3to1_tcp` | same with `--loss tcp` and `--model-name mlp_ned_scara_total16000_3to1_tcp` |
+
+(`train_all_models.py` trains the two first rows from the included splits. `run_fallback_training.py` without `--name` writes the original checkpoint names; it regenerates the unreachable-target data too, so it needs Webots only if you pass `--webots`.)
+
+Options of `train_mlp.py`: `--size small|medium|large`, `--hidden`, `--loss joints|tcp`, `--decay cosine|none`, `--lr`, `--lr-min`, `--batch`, `--epochs`, `--patience`, `--seed`, `--tcp-limit-weight` (default 0.01), `--splits-dir`, `--model-name`. Outputs per model: `models/<name>.npz` (weights), `.json` (settings and best epoch) and `.csv` (loss history).
 
 ## 4. Evaluate
 
