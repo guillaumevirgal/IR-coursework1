@@ -87,9 +87,16 @@ python scripts/plot_fk_precision.py  # summarise
 **Retrain all 14 models with one command** (the exact settings used for the report; seed 2026, 3000 epochs, patience 300, batch 32):
 
 ```bash
-python scripts/train_all_models.py --dry-run     # list the 14 train commands
-python scripts/train_all_models.py               # train all; names get "_repro", shipped models untouched
-python scripts/train_all_models.py --only large  # subset, e.g. only large-data models
+# 1. Preview only: prints the 14 training commands, trains nothing
+python scripts/train_all_models.py --dry-run
+
+# 2. Train all 14 models. Each is saved with "_repro" added to its name
+#    (e.g. mlp_ned_scara_large_h64x64_cosine_repro), so the supplied models are not replaced
+python scripts/train_all_models.py
+
+# 3. Train only the models whose name contains the given text (here: "large",
+#    i.e. the large-dataset models). Use "tcp" for the TCP-loss models, "small" for small ones
+python scripts/train_all_models.py --only large
 ```
 
 It needs only NumPy and the included `data/`. Training all models takes a while; `--only` runs a subset. Checkpoints are never overwritten, so retrained models are saved with the `_repro` suffix (change it with `--suffix`).
