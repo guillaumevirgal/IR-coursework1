@@ -4,5 +4,5 @@ numpy>=1.24,<3
 # Figures only; the coursework brief exempts scripts used only to create figures.
 matplotlib>=3.7,<4
 
-# Allowed by the coursework brief; used only by the legacy ANN comparison scripts.
+# Allowed by the coursework brief; used only by the scikit-learn baseline scripts.
 scikit-learn>=1.3,<2

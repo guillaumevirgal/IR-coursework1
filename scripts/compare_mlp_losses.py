@@ -6,25 +6,18 @@ fixed checkpoints; it never trains, selects epochs, or tunes on the test set.
 
 import argparse
 import json
-import os
 from pathlib import Path
 import sys
-import tempfile
 
-os.environ.setdefault("MPLCONFIGDIR", str(Path(tempfile.gettempdir()) / "ir_comparison_mpl"))
-os.environ.setdefault("XDG_CACHE_HOME", str(Path(tempfile.gettempdir()) / "ir_comparison_cache"))
-Path(os.environ["MPLCONFIGDIR"]).mkdir(parents=True, exist_ok=True)
-Path(os.environ["XDG_CACHE_HOME"]).mkdir(parents=True, exist_ok=True)
 
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from scripts.plot_mlp_evaluation import endpoint_summary, plot_task4a
-from scripts.train_mlp import JOINT_LIMITS, denormalise, FORWARD_KINEMATICS
+from scripts.robot_config import FORWARD_KINEMATICS, JOINT_LIMITS, denormalise
 from scripts.evaluation_common import (
     ROOT, SIZES, ROBOTS, digest, model_name, load_test, predict_model,
-    physical_joint_errors, position_statistics, write_csv, select_models, coverage,
+    physical_joint_errors, position_statistics, write_csv, select_models, coverage, draw_graphs,
 )
 
 
@@ -67,11 +60,6 @@ def evaluate(directory, size, variant, robot, *, test_root=None, joint_rows=None
                   "weights_sha256": digest(directory / f"{model_name(size, variant)}.npz"),
                   "test_sha256": digest(path), "config": config}
     return row, provenance
-
-
-def draw_comparison(rows, output):
-    """Backward-compatible entry point for the endpoint overview."""
-    endpoint_summary(rows, output, "4a")
 
 
 def write_task4a_report(output, rows, joints, missing):
@@ -138,10 +126,11 @@ def main():
         "completed_position_summaries": len(rows), "completed_joint_summaries": len(joints),
         "std_ddof": 0, "prediction_policy": "clip normalised joints to [-1,1] before FK and physical joint errors"}
     (args.output / "metrics.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
-    plot_task4a(rows, joints, predictions, args.output, args.model_dir)
+    drawn = draw_graphs("plot_task4a", rows, joints, predictions, args.output, args.model_dir)
     write_task4a_report(args.output, rows, joints, missing)
-    with (args.output / "task4a.md").open("a", encoding="utf-8") as destination:
-        destination.write("\n[Graphs and how to read them](graphs.md)\n")
+    if drawn:
+        with (args.output / "task4a.md").open("a", encoding="utf-8") as destination:
+            destination.write("\n[Graphs and how to read them](graphs.md)\n")
     print(f"Saved Task 4.A results to {args.output}")
 
 

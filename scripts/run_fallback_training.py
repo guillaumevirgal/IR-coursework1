@@ -21,7 +21,8 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from scripts.train_mlp import INPUTS, OUTPUTS, JOINT_LIMITS, denormalise
+from scripts.robot_config import JOINT_LIMITS, denormalise
+from scripts.train_mlp import INPUTS, OUTPUTS
 from scripts.numpy_neighbors import NumpyNearestNeighbors as cKDTree
 from scripts.tcp_loss import tcp_and_jacobian
 from scripts import forward_kinematics_ned as ned

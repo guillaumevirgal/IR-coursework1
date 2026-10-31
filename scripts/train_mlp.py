@@ -23,8 +23,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from scripts.forward_kinematics_ned import forward_kinematics_ned
-from scripts.forward_kinematics_scara import forward_kinematics_scara
+from scripts.robot_config import FORWARD_KINEMATICS, JOINT_LIMITS, denormalise  # noqa: F401 (re-exported)
 from scripts.tcp_loss import tcp_loss_and_gradient
 
 
@@ -32,24 +31,6 @@ SPLITS = ROOT / "data" / "nn" / "splits"
 MODELS = ROOT / "models"
 INPUTS = ("is_scara", "is_ned", "x", "y", "z")
 OUTPUTS = ("q1", "q2", "q3")
-
-# Must match the sampling ranges in
-# controllers/generate_dataset/generate_dataset.py (not imported directly
-# because that module needs the Webots controller API).
-JOINT_LIMITS = {
-    "ned": ((-2.8, 2.8), (-0.8, 0.8), (0.0, 1.3)),
-    "scara": ((-0.73, 0.73), (0.0, 0.83), (-0.2, 0.0)),
-}
-FORWARD_KINEMATICS = {"ned": forward_kinematics_ned, "scara": forward_kinematics_scara}
-
-
-def denormalise(q_norm, limits):
-    """Map normalised joints in [-1, 1] back to motor units (rad or m)."""
-
-    lower = np.array([low for low, _ in limits])
-    upper = np.array([high for _, high in limits])
-    return (q_norm + 1.0) / 2.0 * (upper - lower) + lower
-
 
 def load_split(robots, kind, size, directory=SPLITS):
     """Stack the requested robots' CSVs into input and target arrays."""

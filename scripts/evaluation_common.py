@@ -14,6 +14,22 @@ SIZES = ("small", "medium", "large")
 ROBOTS = ("ned", "scara")
 
 
+def draw_graphs(function_name, *args):
+    """Run a plotting function if matplotlib is installed; return True if drawn.
+
+    The Task 4 numbers (CSV/JSON/Markdown) need only NumPy. Figures are optional,
+    so a machine without matplotlib still produces every result.
+    """
+    try:
+        from scripts import plot_mlp_evaluation
+    except ImportError:
+        print("matplotlib not installed: skipping graphs "
+              "(run scripts/plot_mlp_evaluation.py later to draw them).")
+        return False
+    getattr(plot_mlp_evaluation, function_name)(*args)
+    return True
+
+
 def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 

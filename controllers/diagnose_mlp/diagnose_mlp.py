@@ -12,9 +12,8 @@ from controller import Supervisor
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-from scripts.forward_kinematics_ned import forward_kinematics_ned
-from scripts.forward_kinematics_scara import forward_kinematics_scara
-from scripts.train_mlp import INPUTS, JOINT_LIMITS, MLP, OUTPUTS, denormalise
+from scripts.robot_config import FORWARD_KINEMATICS, JOINT_LIMITS, denormalise
+from scripts.train_mlp import INPUTS, MLP, OUTPUTS
 from controllers.mlp_ik.mlp_ik import ROBOTS
 
 
@@ -52,7 +51,7 @@ def load_model(name, robot, model_dir=None):
 def main():
     args = parse_args()
     robot_cfg = ROBOTS[args.robot]
-    fk = forward_kinematics_scara if args.robot == "scara" else forward_kinematics_ned
+    fk = FORWARD_KINEMATICS[args.robot]
     if not 0 < args.settle_time <= args.timeout or not math.isfinite(args.timeout):
         raise ValueError("Require 0 < settle-time <= finite timeout")
     model, mean, std = load_model(args.model, args.robot, args.model_dir)

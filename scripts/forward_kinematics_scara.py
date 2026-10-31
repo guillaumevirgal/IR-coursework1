@@ -1,4 +1,18 @@
-"""Forward kinematics for the SCARA arm."""
+"""Forward kinematics for the SCARA arm.
+
+Given the three active joint values it returns the TCP (x, y, z) in metres in the
+robot's own base frame (the same frame arm_controller.get_tcp_position() reports).
+Active joint vector, per the course handout:
+    q1 - base_arm_motor      shoulder yaw about the vertical axis (rad)
+    q2 - arm_motor           elbow yaw about a vertical axis (rad)
+    q4 - shaft_linear_motor  vertical lift of the shaft (m, <= 0 is downwards)
+The shaft rotation motor is fixed at zero and is not part of the input.
+Unlike the Ned, every revolute joint is vertical, so the arm moves in a plane at a
+height set only by the lift: this is the main Ned/SCARA difference the network
+has to learn (the is_scara/is_ned input flags select which one applies).
+
+Link constants come from the course's "Robot specifications" appendix.
+"""
 
 import math
 
@@ -16,6 +30,7 @@ TCP_Z_OFFSET = -0.034
 
 
 def forward_kinematics_scara(joint_values):
+    """Return the (x, y, z) TCP position for joints [q1, q2, q4]."""
     q1, q2, q4 = joint_values
 
     # Rotate the joint 2 to TCP vector by q2
@@ -49,6 +64,7 @@ def forward_kinematics_scara(joint_values):
     z = BASE_TO_JOINT1_Z + arm_z
 
     return x, y, z
+
 
 if __name__ == "__main__":
     test_joints = [0.5, -0.5, -0.1]

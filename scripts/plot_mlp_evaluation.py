@@ -28,7 +28,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from scripts.evaluation_common import SIZES, ROBOTS, load_test, model_name, predict_model
-from scripts.train_mlp import JOINT_LIMITS
+from scripts.robot_config import JOINT_LIMITS
 from scripts.tcp_loss import tcp_loss_and_gradient
 
 VARIANTS = (

@@ -20,7 +20,8 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from scripts.forward_kinematics_ned import forward_kinematics_ned
 from scripts.forward_kinematics_scara import forward_kinematics_scara
-from scripts.train_mlp import INPUTS, JOINT_LIMITS, MLP, MODELS, OUTPUTS, denormalise
+from scripts.robot_config import JOINT_LIMITS, denormalise
+from scripts.train_mlp import INPUTS, MLP, MODELS, OUTPUTS
 
 
 DEFAULT_MODEL = "mlp_ned_scara_large_h64x64_cosine"

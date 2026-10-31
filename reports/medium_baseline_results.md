@@ -116,8 +116,9 @@ and generated JSON metrics are stored under `outputs/medium_baseline/`
 locally and are not committed to Git.
 
 To reproduce the results, install the dependencies in `requirements.txt`,
-run `python scripts/train_ann.py`, and then run the validation and test
-evaluation scripts. Ensure the expected dataset splits are present.
+run `python scripts/train_sklearn_baseline.py`, and then run
+`python scripts/evaluate_sklearn_baseline.py` (validation) and
+`python scripts/evaluate_sklearn_baseline.py --split test`. Ensure the expected dataset splits are present.
 
 The independent test results should remain reserved for final evaluation;
 model selection and hyperparameter tuning should use training and

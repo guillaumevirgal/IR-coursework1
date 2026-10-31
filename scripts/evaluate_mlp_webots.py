@@ -17,11 +17,10 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from scripts.evaluation_common import (
     ROOT, SIZES, ROBOTS, digest, model_name, load_test, predict_model,
-    position_statistics, write_csv, select_models, coverage,
+    position_statistics, write_csv, select_models, coverage, draw_graphs,
 )
-from scripts.train_mlp import JOINT_LIMITS, denormalise
+from scripts.robot_config import JOINT_LIMITS, denormalise
 from scripts.webots_mlp_runner import run_webots
-from scripts.plot_mlp_evaluation import plot_task4b
 
 
 def first_100(test_root, robot):
@@ -151,9 +150,10 @@ def main():
         raise
     metadata["execution_complete"] = True
     save_results(args, summary, predictions, metadata)
-    plot_task4b(summary, predictions, args.output, args.model_dir)
-    with (args.output / "task4b.md").open("a", encoding="utf-8") as destination:
-        destination.write("\n[Graphs and how to read them](graphs.md)\n")
+    drawn = draw_graphs("plot_task4b", summary, predictions, args.output, args.model_dir)
+    if drawn:
+        with (args.output / "task4b.md").open("a", encoding="utf-8") as destination:
+            destination.write("\n[Graphs and how to read them](graphs.md)\n")
     print(f"Saved Task 4.B results to {args.output}")
 
 

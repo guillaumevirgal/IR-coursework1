@@ -23,10 +23,6 @@ import numpy as np
 DATA = ROOT / "data" / "nn" / "splits"
 MODELS = ROOT / "models"
 DEFAULT_MODEL = "mlp_ned_scara_large_h64x64_cosine"
-JOINT_LIMITS = {
-    "ned": ((-2.8, 2.8), (-0.8, 0.8), (0.0, 1.3)),
-    "scara": ((-0.73, 0.73), (0.0, 0.83), (-0.2, 0.0)),
-}
 JOINT_NAMES = ("q1", "q2", "q3")
 INPUTS = ("is_scara", "is_ned", "x", "y", "z")
 WORLDS = {"ned": "articulated.wbt", "scara": "scara.wbt"}
@@ -35,10 +31,10 @@ sys.path.insert(0, str(ROOT))
 from scripts.webots_mlp_runner import (  # noqa: E402
     write_cases, make_diagnostic_world, remove_world, run_webots,
 )
-from scripts.train_mlp import MLP, denormalise  # noqa: E402
+from scripts.robot_config import FORWARD_KINEMATICS, JOINT_LIMITS, denormalise  # noqa: E402
+from scripts.train_mlp import MLP  # noqa: E402
 from scripts.numpy_neighbors import NumpyNearestNeighbors as cKDTree  # noqa: E402
 from scripts.forward_kinematics_ned import forward_kinematics_ned  # noqa: E402
-from scripts.forward_kinematics_scara import forward_kinematics_scara  # noqa: E402
 
 
 def parse_args():
@@ -116,7 +112,7 @@ def extra_points(path, robot):
 def kinematic_workspace_boundary(robot, resolution=32):
     """Sample the joint-limit boundary of the FK workspace with the floor cut."""
     limits = JOINT_LIMITS[robot]
-    fk = forward_kinematics_scara if robot == "scara" else forward_kinematics_ned
+    fk = FORWARD_KINEMATICS[robot]
     axes = [np.linspace(low, high, resolution) for low, high in limits]
     floor_z = 0.02 if robot == "scara" else 0.14
     points = []

@@ -57,6 +57,9 @@ dist/
 *.joblib
 *.npz
 
+# ...except the trained checkpoints, which are part of the submission
+!models/*.npz
+
 # Training output folders
 runs/
 outputs/
@@ -90,10 +93,3 @@ Thumbs.db
 *.swp
 *.swo
 *~
-# Python virtual environments
-.venv/
-venv/
-
-# Python cache files
-__pycache__/
-*.py[cod]

@@ -10,8 +10,7 @@ sys.path.insert(0, str(ROOT))
 
 from common.arm_controller import Joint
 from common.dataset_generator import DatasetConfig, generate_dataset
-from scripts.forward_kinematics_ned import forward_kinematics_ned
-from scripts.forward_kinematics_scara import forward_kinematics_scara
+from scripts.robot_config import FORWARD_KINEMATICS, JOINT_LIMITS
 
 
 CONFIGS = {
@@ -23,8 +22,8 @@ CONFIGS = {
             "elbow": Joint("joint_3", speed=2.0, tolerance=1e-3),
         },
         tcp_slot="tcpSlot",
-        joint_limits=((-2.8, 2.8), (-0.8, 0.8), (0.0, 1.3)),
-        forward_kinematics=forward_kinematics_ned,
+        joint_limits=JOINT_LIMITS["ned"],
+        forward_kinematics=FORWARD_KINEMATICS["ned"],
         command_pose=lambda pose: pose,
         # Below this, the wrist/gripper can contact the floor.
         minimum_z=0.14,
@@ -39,8 +38,8 @@ CONFIGS = {
             "lift": Joint("shaft_linear_motor", speed=0.05, tolerance=1e-4),
         },
         tcp_slot="handSlot",
-        joint_limits=((-0.73, 0.73), (0.0, 0.83), (-0.2, 0.0)),
-        forward_kinematics=forward_kinematics_scara,
+        joint_limits=JOINT_LIMITS["scara"],
+        forward_kinematics=FORWARD_KINEMATICS["scara"],
         command_pose=lambda pose: (pose[0], pose[1], 0.0, pose[2]),
         # Below this, the vertical shaft can contact the floor.
         minimum_z=0.02,
