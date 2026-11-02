@@ -27,6 +27,7 @@ import csv
 import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 
@@ -92,8 +93,12 @@ def main():
         model_path = name if model["group"] == "." else f"{model['group']}/{name}"
         for robot in ROBOTS:
             print(f"{name} · {robot}: running {SAMPLES} targets in headless Webots...", flush=True)
-            rows = run_webots(robot, model_path, cases[robot], RESULTS / "webots_work", args.webots,
-                              args.settle_time, args.timeout)
+            webots_args = SimpleNamespace(
+                webots=args.webots, output=RESULTS / "webots_work",
+                settle_time=args.settle_time, timeout=args.timeout,
+                model_dir=None, wall_timeout=None,
+            )
+            rows = run_webots(robot, model_path, cases[robot], webots_args)
             if [row["label"] for row in rows] != [case["label"] for case in cases[robot]]:
                 raise RuntimeError(f"Webots returned {len(rows)} rows for {name} · {robot}; expected all {SAMPLES} in order")
 

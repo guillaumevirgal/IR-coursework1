@@ -94,9 +94,20 @@ def learning_curve(history_path):
         return None
     with history_path.open(newline="", encoding="utf-8") as source:
         rows = list(csv.DictReader(source))
+    if not rows:
+        return None
     step = max(1, len(rows) // CURVE_POINTS)
     picked = rows[::step] + ([rows[-1]] if (len(rows) - 1) % step else [])
-    return {key: [float(row[key]) for row in picked] for key in ("epoch", "train_mse", "val_mse")}
+    # Joint-MSE history files use train_mse/val_mse; TCP-loss history files (not
+    # part of this activation sweep, but may share the models/ directory) use
+    # train_loss_m2/val_loss_m2. Fall back so an unrelated model never crashes this.
+    train_key = "train_mse" if "train_mse" in rows[0] else "train_loss_m2"
+    val_key = "val_mse" if "val_mse" in rows[0] else "val_loss_m2"
+    return {
+        "epoch": [float(row["epoch"]) for row in picked],
+        "train_mse": [float(row[train_key]) for row in picked],
+        "val_mse": [float(row[val_key]) for row in picked],
+    }
 
 
 def evaluate(config_path, tests, validation):
@@ -147,10 +158,37 @@ def evaluate(config_path, tests, validation):
     return entry
 
 
+def in_this_sweep(path):
+    """Keep only this activation/architecture sweep's own checkpoints.
+
+    models/ also holds later, unrelated families (TCP loss, directional
+    fallback, total16000/20000) trained on different objectives or datasets;
+    mixing those into this comparison would corrupt the "lowest validation
+    joint MSE per size" selection and the ReLU-vs-tanh comparison. models/tanh/
+    and models/bigger/ are wholly this sweep's own. At the top level, keep only
+    the plain ReLU baselines (h64x64_cosine, no further suffix) plus any name
+    containing "_tanh" or "_per-robot".
+    """
+
+    if path.parent.name in ("tanh", "bigger"):
+        return True
+    name = path.stem
+    if name.endswith("_tanh") or name.endswith("_per-robot"):
+        return True
+    return name in (
+        "mlp_ned_scara_small_h64x64_cosine",
+        "mlp_ned_scara_medium_h64x64_cosine",
+        "mlp_ned_scara_large_h64x64_cosine",
+    )
+
+
 def main():
     tests = {robot: load_rows(robot, "test") for robot in ROBOTS}
     validation = {size: {robot: load_rows(robot, f"validation_{size}") for robot in ROBOTS} for size in SIZES}
-    configs = sorted(path for path in MODELS.rglob("*.json") if path.with_suffix(".npz").is_file())
+    configs = sorted(
+        path for path in MODELS.rglob("*.json")
+        if path.with_suffix(".npz").is_file() and in_this_sweep(path)
+    )
     if not configs:
         raise FileNotFoundError(f"No model .json/.npz pairs under {MODELS}")
     results = [evaluate(path, tests, validation) for path in configs]
