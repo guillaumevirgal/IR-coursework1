@@ -40,6 +40,7 @@ If Webots is not found automatically, pass `--webots "<path to webots executable
 | 2 Dataset generation | `controllers/generate_dataset/`, `controllers/common/dataset_generator.py`, `scripts/run_dataset_generation.py` |
 | 3 Training | `scripts/train_mlp.py`, `scripts/train_all_models.py`, `scripts/tcp_loss.py` |
 | 4.A / 4.B Evaluation | `scripts/compare_mlp_losses.py`, `scripts/evaluate_mlp_webots.py`, `scripts/evaluation_common.py`, `controllers/diagnose_mlp/` |
+| Architecture / activation sweep (Task 3 hyperparameter justification) | `scripts/evaluate_configurations.py`, `scripts/evaluate_configurations_webots.py`, `scripts/plot_configuration_results.py`, written up in [reports/configuration_evaluation/README.md](reports/configuration_evaluation/README.md) |
 | Live neural IK | `controllers/mlp_ik/mlp_ik.py` |
 | Shared joint limits and normalisation | `scripts/robot_config.py` |
 | 5 Poster figures | `poster/` (self-contained: script, data snapshot, figures) |
@@ -139,7 +140,15 @@ Default names are `mlp_ned_scara_<size>_h<hidden>_<decay>` plus `_tcp` for the T
 
 (`train_all_models.py` trains the two first rows from the included splits. `run_fallback_training.py` without `--name` writes the original checkpoint names; it regenerates the unreachable-target data too, so it needs Webots only if you pass `--webots`.)
 
-Options of `train_mlp.py`: `--size small|medium|large`, `--hidden`, `--loss joints|tcp`, `--decay cosine|none`, `--lr`, `--lr-min`, `--batch`, `--epochs`, `--patience`, `--seed`, `--tcp-limit-weight` (default 0.01), `--splits-dir`, `--model-name`. Outputs per model: `models/<name>.npz` (weights), `.json` (settings and best epoch) and `.csv` (loss history).
+Options of `train_mlp.py`: `--size small|medium|large`, `--hidden`, `--loss joints|tcp`, `--activation relu|tanh|per-robot` (default `relu`; `per-robot` uses tanh for Ned rows and ReLU for SCARA rows of the same shared network, selected by the arm flag already in the input), `--decay cosine|none`, `--lr`, `--lr-min`, `--batch`, `--epochs`, `--patience`, `--seed`, `--tcp-limit-weight` (default 0.01), `--splits-dir`, `--model-name`. Outputs per model: `models/<name>.npz` (weights), `.json` (settings and best epoch) and `.csv` (loss history).
+
+**Architecture and activation sweep.** `reports/configuration_evaluation/` has a 36-configuration comparison across depth, width, dataset size and activation (relu/tanh/per-robot), with the full Task 4.A/4.B evaluation and findings in its own [README.md](reports/configuration_evaluation/README.md). It uses the same `train_mlp.py`; regenerate it with:
+
+```bash
+python scripts/evaluate_configurations.py         # Task 4.A over every checkpoint in models/
+python scripts/evaluate_configurations_webots.py  # Task 4.B for the picked models (needs Webots)
+python scripts/plot_configuration_results.py      # figures
+```
 
 ## 4. Evaluate
 
@@ -194,6 +203,7 @@ Runs targets through the network in headless Webots and writes one PNG per targe
 - Unreachable-target experiment (data and checkpoints named `directional_fallback`): [reports/README_unreachable_targets.md](reports/README_unreachable_targets.md).
 - Extra commands: [reports/README_extra.md](reports/README_extra.md).
 - scikit-learn baseline: `python scripts/train_sklearn_baseline.py`, then `python scripts/evaluate_sklearn_baseline.py [--split test]`.
+- Architecture / activation sweep (depth, width, dataset size, relu vs tanh vs per-robot): [reports/configuration_evaluation/README.md](reports/configuration_evaluation/README.md).
 
 ## 8. Poster figures
 
