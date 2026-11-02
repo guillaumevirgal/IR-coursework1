@@ -67,8 +67,9 @@ def predict_model(directory, size, variant, robot, x):
         raise ValueError(f"{name} was not trained on {robot}")
     hidden = config["hidden"]
     hidden = [hidden] if isinstance(hidden, int) else hidden
+    activation = config.get("activation") or "relu"  # pre-activation-flag models were ReLU
     with np.load(directory / f"{name}.npz") as stored:
-        model = MLP((len(INPUTS), *hidden, len(OUTPUTS)), np.random.default_rng(0))
+        model = MLP((len(INPUTS), *hidden, len(OUTPUTS)), np.random.default_rng(0), activation=activation)
         model.params = {key: stored[key].copy() for key in model.params}
         prediction = model.predict((x - stored["mean"]) / stored["std"])
     if prediction.shape != (len(x), 3) or not np.isfinite(prediction).all():

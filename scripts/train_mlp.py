@@ -46,30 +46,52 @@ def load_split(robots, kind, size, directory=SPLITS):
 
 
 class MLP:
-    """Fully connected ReLU hidden layers, linear output, trained with Adam."""
+    """Fully connected hidden layers, linear output, trained with Adam.
 
-    def __init__(self, sizes, rng):
+    activation: "relu", "tanh", or "per-robot". "per-robot" keeps one shared
+    network but picks each row's hidden non-linearity from its arm flag:
+    h = is_ned * tanh(z) + is_scara * relu(z).
+    """
+
+    def __init__(self, sizes, rng, activation="relu"):
         # sizes = (n_in, *hidden, n_out). He initialisation suits ReLU layers;
-        # Xavier-style init for the linear output layer.
+        # Xavier-style init for tanh/per-robot hidden layers and the linear output layer.
         self.params = {}
         self.n_layers = len(sizes) - 1
+        self.activation = activation
         for index, (n_from, n_to) in enumerate(zip(sizes[:-1], sizes[1:]), start=1):
-            gain = 1.0 if index == self.n_layers else 2.0
+            gain = 2.0 if (index < self.n_layers and self.activation == "relu") else 1.0
             self.params[f"W{index}"] = rng.normal(0.0, math.sqrt(gain / n_from), (n_from, n_to))
             self.params[f"b{index}"] = np.zeros(n_to)
         self.m = {key: np.zeros_like(value) for key, value in self.params.items()}
         self.v = {key: np.zeros_like(value) for key, value in self.params.items()}
         self.step = 0
 
+    def hidden_activation(self, pre):
+        if self.activation == "tanh":
+            return np.tanh(pre)
+        if self.activation == "per-robot":
+            return self.is_ned * np.tanh(pre) + (1.0 - self.is_ned) * np.maximum(pre, 0.0)
+        return np.maximum(pre, 0.0)
+
+    def hidden_derivative(self, pre):
+        if self.activation == "tanh":
+            return 1.0 - np.tanh(pre) ** 2
+        relu = (pre > 0.0).astype(float)
+        if self.activation == "per-robot":
+            return self.is_ned * (1.0 - np.tanh(pre) ** 2) + (1.0 - self.is_ned) * relu
+        return relu
+
     def forward(self, x):
         """Return the output and each layer's (input, pre-activation) for backprop."""
 
         cache = []
         activation = x
+        self.is_ned = x[:, 1:2]  # flag column; standardisation leaves flags as 0/1
         for index in range(1, self.n_layers + 1):
             pre = activation @ self.params[f"W{index}"] + self.params[f"b{index}"]
             cache.append((activation, pre))
-            activation = pre if index == self.n_layers else np.maximum(pre, 0.0)
+            activation = pre if index == self.n_layers else self.hidden_activation(pre)
         return activation, cache
 
     def predict(self, x):
@@ -93,7 +115,7 @@ class MLP:
             grads[f"W{index}"] = layer_input.T @ d_pre
             grads[f"b{index}"] = d_pre.sum(axis=0)
             if index > 1:
-                d_pre = (d_pre @ self.params[f"W{index}"].T) * (cache[index - 2][1] > 0.0)
+                d_pre = (d_pre @ self.params[f"W{index}"].T) * self.hidden_derivative(cache[index - 2][1])
 
         self.step += 1
         for key, grad in grads.items():
@@ -146,6 +168,8 @@ def parse_args():
                         help="TCP loss joint-limit penalty weight (m² per squared normalised joint unit)")
     parser.add_argument("--splits-dir", type=Path, default=SPLITS,
                         help="separate dataset experiment; defaults to the original splits")
+    parser.add_argument("--activation", choices=("relu", "tanh", "per-robot"), default="relu",
+                        help="hidden activation; per-robot = tanh for Ned rows, ReLU for SCARA rows")
     parser.add_argument("--model-name", help="distinct checkpoint name; refuses to replace existing files")
     args = parser.parse_args()
     if args.epochs < 1 or args.batch < 1 or args.patience < 1:
@@ -163,6 +187,8 @@ def main():
     args = parse_args()
     rng = np.random.default_rng(args.seed)
     name = args.model_name or f"mlp_{'_'.join(args.robots)}_{args.size}_h{'x'.join(map(str, args.hidden))}_{args.decay}"
+    if args.activation != "relu" and not args.model_name:
+        name += f"_{args.activation}"
     if args.loss == "tcp" and not args.model_name:
         name += "_tcp"
     if args.model_name and any((MODELS / f"{name}{suffix}").exists()
@@ -196,7 +222,7 @@ def main():
     x_train = (x_train_raw - mean) / std
     x_val = (x_val_raw - mean) / std
 
-    model = MLP((len(INPUTS), *args.hidden, len(OUTPUTS)), rng)
+    model = MLP((len(INPUTS), *args.hidden, len(OUTPUTS)), rng, activation=args.activation)
     best = {"val_loss": math.inf, "epoch": 0, "params": None}
     history = []
     loss_label = "joint MSE" if args.loss == "joints" else "TCP objective (m², includes limit penalty)"

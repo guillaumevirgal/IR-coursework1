@@ -73,7 +73,8 @@ class SharedMLPIK:
         if robot_name not in config["robots"]:
             raise ValueError(f"Model {model_name} was not trained on {robot_name}")
         hidden = config["hidden"] if isinstance(config["hidden"], list) else [config["hidden"]]
-        self.model = MLP((len(INPUTS), *hidden, len(OUTPUTS)), np.random.default_rng(0))
+        activation = config.get("activation") or "relu"  # pre-activation-flag models were ReLU
+        self.model = MLP((len(INPUTS), *hidden, len(OUTPUTS)), np.random.default_rng(0), activation=activation)
         with np.load(MODELS / f"{model_name}.npz") as stored:
             self.model.params = {key: stored[key] for key in self.model.params}
             self.mean = stored["mean"]
