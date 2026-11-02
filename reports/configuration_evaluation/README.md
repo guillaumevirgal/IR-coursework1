@@ -9,6 +9,10 @@ python scripts/evaluate_configurations.py
 python scripts/plot_configuration_results.py
 ```
 
+For a ranking by architecture rather than by checkpoint (dataset size
+collapsed to whichever size scored best for that design), see
+[ranking_by_architecture.md](ranking_by_architecture.md).
+
 ## Model selection
 
 One model per dataset size, chosen by the **lowest validation MSE on the

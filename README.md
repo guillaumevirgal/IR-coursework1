@@ -40,7 +40,7 @@ If Webots is not found automatically, pass `--webots "<path to webots executable
 | 2 Dataset generation | `controllers/generate_dataset/`, `controllers/common/dataset_generator.py`, `scripts/run_dataset_generation.py` |
 | 3 Training | `scripts/train_mlp.py`, `scripts/train_all_models.py`, `scripts/tcp_loss.py` |
 | 4.A / 4.B Evaluation | `scripts/compare_mlp_losses.py`, `scripts/evaluate_mlp_webots.py`, `scripts/evaluation_common.py`, `controllers/diagnose_mlp/` |
-| Architecture / activation sweep (Task 3 hyperparameter justification) | `scripts/evaluate_configurations.py`, `scripts/evaluate_configurations_webots.py`, `scripts/plot_configuration_results.py`, written up in [reports/configuration_evaluation/README.md](reports/configuration_evaluation/README.md) |
+| Architecture / activation sweep (Task 3 hyperparameter justification) | `scripts/evaluate_configurations.py`, `scripts/evaluate_configurations_webots.py`, `scripts/plot_configuration_results.py`, written up in [reports/configuration_evaluation/README.md](reports/configuration_evaluation/README.md); architecture ranking (dataset size collapsed) in [reports/configuration_evaluation/ranking_by_architecture.md](reports/configuration_evaluation/ranking_by_architecture.md) |
 | Live neural IK | `controllers/mlp_ik/mlp_ik.py` |
 | Shared joint limits and normalisation | `scripts/robot_config.py` |
 | 5 Poster figures | `poster/` (self-contained: script, data snapshot, figures) |
@@ -203,7 +203,7 @@ Runs targets through the network in headless Webots and writes one PNG per targe
 - Unreachable-target experiment (data and checkpoints named `directional_fallback`): [reports/README_unreachable_targets.md](reports/README_unreachable_targets.md).
 - Extra commands: [reports/README_extra.md](reports/README_extra.md).
 - scikit-learn baseline: `python scripts/train_sklearn_baseline.py`, then `python scripts/evaluate_sklearn_baseline.py [--split test]`.
-- Architecture / activation sweep (depth, width, dataset size, relu vs tanh vs per-robot): [reports/configuration_evaluation/README.md](reports/configuration_evaluation/README.md).
+- Architecture / activation sweep (depth, width, dataset size, relu vs tanh vs per-robot): [reports/configuration_evaluation/README.md](reports/configuration_evaluation/README.md), ranked by architecture in [ranking_by_architecture.md](reports/configuration_evaluation/ranking_by_architecture.md).
 
 ## 8. Poster figures
 
