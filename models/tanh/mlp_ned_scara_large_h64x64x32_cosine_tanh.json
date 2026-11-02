@@ -1,0 +1,22 @@
+{
+  "robots": [
+    "ned",
+    "scara"
+  ],
+  "size": "large",
+  "hidden": [
+    64,
+    64,
+    32
+  ],
+  "lr": 0.001,
+  "lr_min": 1e-05,
+  "decay": "cosine",
+  "batch": 32,
+  "epochs": 3000,
+  "patience": 300,
+  "seed": 2026,
+  "activation": "tanh",
+  "best_epoch": 2936,
+  "best_val_mse": 8.967815456601417e-05
+}

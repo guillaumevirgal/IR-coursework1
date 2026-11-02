@@ -42,6 +42,7 @@ If Webots is not found automatically, pass `--webots "<path to webots executable
 | 4.A / 4.B Evaluation | `scripts/compare_mlp_losses.py`, `scripts/evaluate_mlp_webots.py`, `scripts/evaluation_common.py`, `controllers/diagnose_mlp/` |
 | Live neural IK | `controllers/mlp_ik/mlp_ik.py` |
 | Shared joint limits and normalisation | `scripts/robot_config.py` |
+| 5 Poster figures | `poster/` (self-contained: script, data snapshot, figures) |
 
 ```text
 worlds/        Webots worlds (articulated.wbt = Ned, scara.wbt)
@@ -49,6 +50,8 @@ protos/        Ned robot definition and meshes
 controllers/   Run inside Webots
 scripts/       Run from a terminal
 data/          raw/ (audit rows), nn/ (normalised data and splits), evaluation/
+poster/        Poster figures, with their own script and data (poster/README.md)
+figures/       Dataset analysis plots
 models/        Trained checkpoints: .npz weights, .json config, .csv loss history
 outputs/       Written by your own runs (task4a/, task4b/, ...)
 reports/       Saved results and experiment write-ups
@@ -191,6 +194,14 @@ Runs targets through the network in headless Webots and writes one PNG per targe
 - Unreachable-target experiment (data and checkpoints named `directional_fallback`): [reports/README_unreachable_targets.md](reports/README_unreachable_targets.md).
 - Extra commands: [reports/README_extra.md](reports/README_extra.md).
 - scikit-learn baseline: `python scripts/train_sklearn_baseline.py`, then `python scripts/evaluate_sklearn_baseline.py [--split test]`.
+
+## 8. Poster figures
+
+```bash
+python poster/make_poster_figures.py     # needs Matplotlib; writes poster/figures/ from poster/data/
+```
+
+The `poster/` folder is self-contained; see [poster/README.md](poster/README.md).
 
 ## Reproducibility
 
