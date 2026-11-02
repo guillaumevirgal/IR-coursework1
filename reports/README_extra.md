@@ -2,6 +2,48 @@
 
 Passages from the original README that were cut or condensed in the rewrite. Text is copied from the original. Each heading says which section of `README.md` it belonged to.
 
+## Full checkpoint-by-checkpoint training commands (section 3)
+
+`train_all_models.py` trains the two main-model rows below from the included
+splits; the rest are one-off trials, run individually with `train_mlp.py` (or
+`run_fallback_training.py` for the unreachable-target rows). Default names are
+`mlp_ned_scara_<size>_h<hidden>_<decay>` plus `_tcp` for the TCP loss.
+
+**Main models (reachable data, joint loss and TCP loss)**
+
+| Checkpoint | Command |
+|---|---|
+| `mlp_ned_scara_small_h64x64_cosine` | `python scripts/train_mlp.py --size small --hidden 64 64 --loss joints` |
+| `mlp_ned_scara_medium_h64x64_cosine` | `python scripts/train_mlp.py --size medium --hidden 64 64 --loss joints` |
+| `mlp_ned_scara_large_h64x64_cosine` (default live model) | `python scripts/train_mlp.py --size large --hidden 64 64 --loss joints` |
+| `mlp_ned_scara_small_h64x64_cosine_tcp` | `python scripts/train_mlp.py --size small --hidden 64 64 --loss tcp` |
+| `mlp_ned_scara_medium_h64x64_cosine_tcp` | `python scripts/train_mlp.py --size medium --hidden 64 64 --loss tcp` |
+| `mlp_ned_scara_large_h64x64_cosine_tcp` | `python scripts/train_mlp.py --size large --hidden 64 64 --loss tcp` |
+
+**Early architecture and schedule trials (small data, constant learning rate)**
+
+| Checkpoint | Command |
+|---|---|
+| `mlp_ned_scara_small_h64x64` | `python scripts/train_mlp.py --size small --hidden 64 64 --decay none --model-name mlp_ned_scara_small_h64x64` |
+| `mlp_ned_scara_small_h64` | `python scripts/train_mlp.py --size small --hidden 64 --decay none --model-name mlp_ned_scara_small_h64` |
+
+**Unreachable-target experiment** (needs the `data/nn/directional_fallback*` splits, which are included)
+
+| Checkpoint | Command |
+|---|---|
+| `..._large_h64x64_cosine_directional_fallback` | `python scripts/run_fallback_training.py --name directional_fallback_repeat` |
+| `..._medium_h64x64_cosine_directional_fallback_medium` | `python scripts/run_fallback_training.py --size medium --name directional_fallback_medium_repeat --test-requests data/nn/directional_fallback` |
+| `mlp_ned_scara_total20000_3to1_joints` | `python scripts/train_mlp.py --size large --hidden 64 64 --loss joints --splits-dir data/nn/directional_fallback_total_20000 --model-name mlp_ned_scara_total20000_3to1_joints` |
+| `mlp_ned_scara_total20000_3to1_tcp` | same with `--loss tcp` and `--model-name mlp_ned_scara_total20000_3to1_tcp` |
+| `mlp_ned_scara_total16000_3to1_joints` | same as the 20000 joints command with `--splits-dir data/nn/directional_fallback_total_16000` and `--model-name mlp_ned_scara_total16000_3to1_joints` |
+| `mlp_ned_scara_total16000_3to1_tcp` | same with `--loss tcp` and `--model-name mlp_ned_scara_total16000_3to1_tcp` |
+
+`run_fallback_training.py` without `--name` writes the original checkpoint
+names; it regenerates the unreachable-target data too, so it needs Webots
+only if you pass `--webots`. The test set is never loaded during training.
+To reproduce a shipped name exactly, move the existing `models/<name>.*`
+away first or pass `--model-name`.
+
 ## Dataset generation (section 2, opening)
 
 The generator writes the audit; when it finishes, it derives the ready-to-train master CSV. The runner then creates nested train/validation sets and an independent test set. The visualiser reads the raw audit so measurements and rejected attempts remain inspectable.
