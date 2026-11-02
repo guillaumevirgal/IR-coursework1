@@ -24,7 +24,7 @@ from scripts.robot_config import JOINT_LIMITS, denormalise
 from scripts.train_mlp import INPUTS, MLP, MODELS, OUTPUTS
 
 
-DEFAULT_MODEL = "mlp_ned_scara_large_h64x64_cosine"
+DEFAULT_MODEL = "mlp_ned_scara_large_h64x64x64x64_cosine_per-robot"
 COMMAND_PERIOD = 0.05  # s
 PRINT_PERIOD = 0.5  # s
 TARGET_STEP = 0.002  # m per simulation step; hold a key to keep moving

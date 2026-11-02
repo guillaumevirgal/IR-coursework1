@@ -22,7 +22,7 @@ import numpy as np
 
 DATA = ROOT / "data" / "nn" / "splits"
 MODELS = ROOT / "models"
-DEFAULT_MODEL = "mlp_ned_scara_large_h64x64_cosine"
+DEFAULT_MODEL = "mlp_ned_scara_large_h64x64x64x64_cosine_per-robot"
 JOINT_NAMES = ("q1", "q2", "q3")
 INPUTS = ("is_scara", "is_ned", "x", "y", "z")
 WORLDS = {"ned": "articulated.wbt", "scara": "scara.wbt"}

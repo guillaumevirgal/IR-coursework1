@@ -47,7 +47,7 @@ def main():
     size_mb = args.output.stat().st_size / 1e6
     print(f"Wrote {len(files)} files ({size_mb:.1f} MB) to {args.output}")
     missing = [name for name in ("README.md", "requirements.txt", "worlds/articulated.wbt",
-                                 "worlds/scara.wbt", "models/mlp_ned_scara_large_h64x64_cosine.npz")
+                                 "worlds/scara.wbt", "models/mlp_ned_scara_large_h64x64x64x64_cosine_per-robot.npz")
                if not (ROOT / name).is_file()]
     if missing:
         raise SystemExit(f"Required files missing from the repository: {missing}")
