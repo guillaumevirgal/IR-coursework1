@@ -1,7 +1,9 @@
-"""Evaluate saved joint-loss and TCP-loss MLPs on the same independent tests.
+"""Evaluate the saved MLPs listed in configs/compare_mlp_losses.json on the same independent tests.
 
-Run after training the desired sizes with scripts/train_mlp.py. This script evaluates
-fixed checkpoints; it never trains, selects epochs, or tunes on the test set.
+The model list lives in the config file, so changing which checkpoints are compared
+does not need a code change. Run after training them with scripts/train_mlp.py.
+This script evaluates fixed checkpoints; it never trains, selects epochs, or tunes
+on the test set.
 """
 
 import argparse
@@ -16,16 +18,19 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from scripts.robot_config import FORWARD_KINEMATICS, JOINT_LIMITS, denormalise
 from scripts.evaluation_common import (
-    ROOT, SIZES, ROBOTS, digest, model_name, load_test, predict_model,
-    physical_joint_errors, position_statistics, write_csv, select_models, coverage, draw_graphs,
+    ROOT, SIZES, ROBOTS, digest, load_test, predict_model,
+    physical_joint_errors, position_statistics, write_csv, draw_graphs,
 )
 
+DEFAULT_CONFIG = ROOT / "configs/compare_mlp_losses.json"
 
-def evaluate(directory, size, variant, robot, *, test_root=None, joint_rows=None, predictions=None):
+
+def evaluate(directory, model, robot, *, test_root=None, joint_rows=None, predictions=None):
     """Task 4.A on every test sample; retain optional physical joint details."""
+    size, variant, name = model["size"], model["variant"], model["name"]
     path = (test_root or ROOT / "data/nn/splits") / robot / "test.csv"
     x, y = load_test(path, robot)
-    prediction, config = predict_model(directory, size, variant, robot, x)
+    prediction, config = predict_model(directory, size, variant, robot, x, name=name)
     command = denormalise(np.clip(prediction, -1, 1), JOINT_LIMITS[robot])
     true_q = denormalise(y, JOINT_LIMITS[robot])
     fk_positions = np.array([FORWARD_KINEMATICS[robot](q) for q in command])
@@ -56,15 +61,15 @@ def evaluate(directory, size, variant, robot, *, test_root=None, joint_rows=None
                 **dict(zip(("fk_x_m", "fk_y_m", "fk_z_m"), fk_positions[i])),
                 "position_error_mm": errors[i],
                 **{f"joint{j+1}_coursework_error": joint_errors[i, j] for j in range(3)}})
-    provenance = {"size": size, "variant": variant, "robot": robot,
-                  "weights_sha256": digest(directory / f"{model_name(size, variant)}.npz"),
+    provenance = {"size": size, "variant": variant, "robot": robot, "name": name,
+                  "weights_sha256": digest(directory / f"{name}.npz"),
                   "test_sha256": digest(path), "config": config}
     return row, provenance
 
 
-def write_task4a_report(output, rows, joints, missing):
+def write_task4a_report(output, rows, joints, missing, models):
     lines = ["# Task 4.A: independent test evaluation", "",
-        "All test samples; saved checkpoints only. TCP positions are calculated with FK after controller-equivalent joint-limit clipping.", "",
+        "Models listed in `configs/compare_mlp_losses.json`. All test samples; saved checkpoints only. TCP positions are calculated with FK after controller-equivalent joint-limit clipping.", "",
         "Statistics use population standard deviation (`ddof=0`). Angular error is signed `atan2(sin(true-predicted), cos(true-predicted))` in rad. SCARA lift uses the handout's squared displacement error in m². Normalised joint RMSE is additional and does not replace these physical per-joint statistics.", "",
         "## Position error", "", "| Size | Model | Robot | Samples | Mean (mm) | Std (mm) | RMSE (mm) |",
         "|---|---|---|---:|---:|---:|---:|"]
@@ -76,58 +81,54 @@ def write_task4a_report(output, rows, joints, missing):
     for row in joints:
         lines.append(f"| {row['size']} | {row['variant']} | {row['robot']} | {row['joint']} | {row['unit']} | "
                      f"{row['mean_error']:.6g} | {row['std_error']:.6g} |")
-    lines += ["", "## Coverage", "", "For a complete model family Task 4.A needs three sizes × two arms: six position summaries and eighteen joint summaries."]
+    lines += ["", "## Coverage", "", f"{len(models)} configured models; each is evaluated on both robots: {len(rows)} position summaries and {len(joints)} joint summaries."]
     if missing:
-        lines += ["", "Unavailable selected checkpoints (not evaluated): " + ", ".join(f"{s}/{v}" for s, v in missing) + "."]
-    lines += ["", "See `predictions.csv` for every network prediction and error, `joint_errors.csv` for per-joint summaries, and `metrics.json` for model/data hashes and model-family coverage. Task 4.B is a separate Webots measurement; these FK results do not replace it.", ""]
+        lines += ["", "Unavailable configured checkpoints (not evaluated): " + ", ".join(model["name"] for model in missing) + "."]
+    lines += ["", "See `predictions.csv` for every network prediction and error, `joint_errors.csv` for per-joint summaries, and `metrics.json` for model/data hashes and coverage. Task 4.B is a separate Webots measurement; these FK results do not replace it.", ""]
     (output / "task4a.md").write_text("\n".join(lines), encoding="utf-8")
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG, help="JSON list of models to compare")
     parser.add_argument("--model-dir", type=Path, default=ROOT / "models")
     parser.add_argument("--test-root", type=Path, default=ROOT / "data/nn/splits")
-    parser.add_argument("--sizes", nargs="+", choices=SIZES, default=list(SIZES))
-    parser.add_argument("--losses", nargs="+", choices=("joints", "tcp"), default=["joints", "tcp"])
-    parser.add_argument("--joint-repeat-dir", type=Path,
-                        help="optional training root containing <size>/joints/<model> artifacts")
-    parser.add_argument("--include-large-baseline", action="store_true",
-                        help="legacy option: large joint baseline is already included by default")
     parser.add_argument("--output", type=Path, default=ROOT / "outputs/task4a")
     args = parser.parse_args()
-    available, missing = select_models(args.model_dir, args.sizes, args.losses)
-    if args.include_large_baseline and ("large", "existing_joints") not in available:
-        extra, _ = select_models(args.model_dir, ["large"], ["joints"])
-        available.extend(extra)
-    for size, variant in missing:
-        print(f"NOT EVALUATED: missing checkpoint {model_name(size, variant)}; recorded in coverage")
+    models = json.loads(args.config.read_text(encoding="utf-8"))["models"]
+    for model in models:
+        if model["size"] not in SIZES:
+            raise ValueError(f"Unknown size {model['size']!r} in {args.config}")
+    available, missing = [], []
+    for model in models:
+        present = all((args.model_dir / f"{model['name']}.{ext}").is_file() for ext in ("json", "npz"))
+        (available if present else missing).append(model)
+    if not available:
+        raise FileNotFoundError(f"No configured checkpoints found in {args.model_dir}")
+    for model in missing:
+        print(f"NOT EVALUATED: missing checkpoint {model['name']}; recorded in coverage")
     rows, provenance, joints, predictions = [], [], [], []
-    runs = [(size, variant, args.model_dir) for size, variant in available]
-    if args.joint_repeat_dir is not None:
-        for size in args.sizes:
-            directory = args.joint_repeat_dir / size / "joints"
-            if (directory / f"{model_name(size, 'joint_repeat')}.npz").is_file():
-                runs.append((size, "joint_repeat", directory))
-    for size, variant, directory in runs:
+    for model in available:
         for robot in ROBOTS:
-            row, source = evaluate(directory, size, variant, robot, test_root=args.test_root,
+            row, source = evaluate(args.model_dir, model, robot, test_root=args.test_root,
                                    joint_rows=joints, predictions=predictions)
             rows.append(row)
             provenance.append(source)
-            print(f"{size:6s} {robot:5s} {variant:16s}: mean ± std "
+            print(f"{model['size']:6s} {robot:5s} {model['variant']:16s}: mean ± std "
                   f"{row['mean_tcp_mm']:.3f} ± {row['std_tcp_mm']:.3f} mm; RMSE {row['rmse_tcp_mm']:.3f} mm")
     args.output.mkdir(parents=True, exist_ok=True)
     write_csv(args.output / "summary.csv", rows)
     write_csv(args.output / "joint_errors.csv", joints)
     write_csv(args.output / "predictions.csv", predictions)
-    metadata = {"task": "4.A", "metrics": rows, "joint_metrics": joints, "provenance": provenance,
-        "missing_models": [{"size": s, "variant": v} for s, v in missing],
-        "coursework_coverage": coverage(available, args.losses),
+    metadata = {"task": "4.A", "config": str(args.config.relative_to(ROOT)), "metrics": rows, "joint_metrics": joints,
+        "provenance": provenance,
+        "missing_models": [{"name": model["name"]} for model in missing],
+        "available_models": [model["name"] for model in available],
         "completed_position_summaries": len(rows), "completed_joint_summaries": len(joints),
         "std_ddof": 0, "prediction_policy": "clip normalised joints to [-1,1] before FK and physical joint errors"}
     (args.output / "metrics.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
     drawn = draw_graphs("plot_task4a", rows, joints, predictions, args.output, args.model_dir)
-    write_task4a_report(args.output, rows, joints, missing)
+    write_task4a_report(args.output, rows, joints, missing, models)
     if drawn:
         with (args.output / "task4a.md").open("a", encoding="utf-8") as destination:
             destination.write("\n[Graphs and how to read them](graphs.md)\n")

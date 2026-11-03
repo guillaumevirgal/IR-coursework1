@@ -1,0 +1,10 @@
+{
+  "name": "directional_fallback_medium",
+  "size": "medium",
+  "seed": 2026,
+  "train_extra": 2000,
+  "test_extra": 1000,
+  "reachable_splits": "data/nn/splits",
+  "reachable_audits": "data/raw",
+  "test_requests": "extras/unreachable_targets/data/nn/directional_fallback"
+}

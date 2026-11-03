@@ -377,6 +377,9 @@ def main():
     training_dir = Path(config.get("splits_dir", DATA))
     if not training_dir.is_absolute():
         training_dir = ROOT / training_dir
+        if not training_dir.exists():
+            # Unreachable-target datasets moved into the extras folder.
+            training_dir = ROOT / "extras/unreachable_targets" / config["splits_dir"]
     for robot in robots:
         robot_summary_rows = []
         cases = robot_points(robot, args.samples) + extra_points(args.points_csv, robot)

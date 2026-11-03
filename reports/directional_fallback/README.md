@@ -67,6 +67,6 @@ The test marker is reweighted to validation group proportions (2 reachable to 1 
 
 ## Run and use
 
-Run `python scripts/run_fallback_training.py --name directional_fallback_repeat` from the repository root; add `--webots PATH` for physics measurements. Existing paths/checkpoints are refused. Data: `data/nn/directional_fallback`; policy audit: `data/raw/directional_fallback`. `manifest.json` records dataset hashes and `source_integrity.json` confirms original data and checkpoint hashes.
+Run `python extras/unreachable_targets/run_fallback_training.py --name directional_fallback_repeat` from the repository root; add `--webots PATH` for physics measurements. Existing paths/checkpoints are refused. Data: `extras/unreachable_targets/data/nn/directional_fallback`; policy audit: `extras/unreachable_targets/data/raw/directional_fallback`. `manifest.json` records dataset hashes and `source_integrity.json` confirms original data and checkpoint hashes.
 
 In Webots keep controller `mlp_ik` and append `"--model=mlp_ned_scara_large_h64x64_cosine_directional_fallback"` after `"ned"` or `"scara"` in `controllerArgs`. The network supplies the learned fallback response.

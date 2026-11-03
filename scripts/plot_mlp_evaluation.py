@@ -35,6 +35,7 @@ VARIANTS = (
     ("existing_joints", "Joint-loss model", "#2878b5"),
     ("tcp", "TCP-loss model", "#e07a3f"),
     ("joint_repeat", "Joint-loss repeat", "#777777"),
+    ("per_robot", "Per-robot model", "#4a9d5b"),
 )
 
 

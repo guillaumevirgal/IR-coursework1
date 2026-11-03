@@ -34,15 +34,15 @@ REACHABLE = [
 UNREACHABLE = [
     (f"mlp_ned_scara_total{n}_3to1_{loss}",
      ["--size", "large", "--hidden", "64", "64", "--loss", loss,
-      "--splits-dir", f"data/nn/directional_fallback_total_{n}"])
-    for n in (20000, 16000) for loss in ("joints", "tcp")
+      "--splits-dir", f"extras/unreachable_targets/data/nn/directional_fallback_total_{n}"])
+    for n in (16000,) for loss in ("joints", "tcp")
 ] + [
     ("mlp_ned_scara_large_h64x64_cosine_directional_fallback",
      ["--size", "large", "--hidden", "64", "64", "--loss", "joints",
-      "--splits-dir", "data/nn/directional_fallback"]),
+      "--splits-dir", "extras/unreachable_targets/data/nn/directional_fallback"]),
     ("mlp_ned_scara_medium_h64x64_cosine_directional_fallback_medium",
      ["--size", "medium", "--hidden", "64", "64", "--loss", "joints",
-      "--splits-dir", "data/nn/directional_fallback_medium"]),
+      "--splits-dir", "extras/unreachable_targets/data/nn/directional_fallback_medium"]),
 ]
 
 

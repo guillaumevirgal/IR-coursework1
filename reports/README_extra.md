@@ -27,18 +27,16 @@ splits; the rest are one-off trials, run individually with `train_mlp.py` (or
 | `mlp_ned_scara_small_h64x64` | `python scripts/train_mlp.py --size small --hidden 64 64 --decay none --model-name mlp_ned_scara_small_h64x64` |
 | `mlp_ned_scara_small_h64` | `python scripts/train_mlp.py --size small --hidden 64 --decay none --model-name mlp_ned_scara_small_h64` |
 
-**Unreachable-target experiment** (needs the `data/nn/directional_fallback*` splits, which are included)
+**Unreachable-target experiment** (data and scripts live in `extras/unreachable_targets/`; see its README)
 
 | Checkpoint | Command |
 |---|---|
-| `..._large_h64x64_cosine_directional_fallback` | `python scripts/run_fallback_training.py --name directional_fallback_repeat` |
-| `..._medium_h64x64_cosine_directional_fallback_medium` | `python scripts/run_fallback_training.py --size medium --name directional_fallback_medium_repeat --test-requests data/nn/directional_fallback` |
-| `mlp_ned_scara_total20000_3to1_joints` | `python scripts/train_mlp.py --size large --hidden 64 64 --loss joints --splits-dir data/nn/directional_fallback_total_20000 --model-name mlp_ned_scara_total20000_3to1_joints` |
-| `mlp_ned_scara_total20000_3to1_tcp` | same with `--loss tcp` and `--model-name mlp_ned_scara_total20000_3to1_tcp` |
-| `mlp_ned_scara_total16000_3to1_joints` | same as the 20000 joints command with `--splits-dir data/nn/directional_fallback_total_16000` and `--model-name mlp_ned_scara_total16000_3to1_joints` |
+| `..._large_h64x64_cosine_directional_fallback` | `python extras/unreachable_targets/run_fallback_training.py --name directional_fallback_repeat` |
+| `..._medium_h64x64_cosine_directional_fallback_medium` | `python extras/unreachable_targets/run_fallback_training.py --size medium --name directional_fallback_medium_repeat --test-requests extras/unreachable_targets/data/nn/directional_fallback` |
+| `mlp_ned_scara_total16000_3to1_joints` | `python scripts/train_mlp.py --size large --hidden 64 64 --loss joints --splits-dir extras/unreachable_targets/data/nn/directional_fallback_total_16000` and `--model-name mlp_ned_scara_total16000_3to1_joints` |
 | `mlp_ned_scara_total16000_3to1_tcp` | same with `--loss tcp` and `--model-name mlp_ned_scara_total16000_3to1_tcp` |
 
-`run_fallback_training.py` without `--name` writes the original checkpoint
+`extras/unreachable_targets/run_fallback_training.py` without `--name` writes the original checkpoint
 names; it regenerates the unreachable-target data too, so it needs Webots
 only if you pass `--webots`. The test set is never loaded during training.
 To reproduce a shipped name exactly, move the existing `models/<name>.*`

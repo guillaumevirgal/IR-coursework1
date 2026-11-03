@@ -35,6 +35,8 @@ def digest(path):
 
 
 def model_name(size, variant):
+    if variant == "per_robot":
+        return f"mlp_ned_scara_{size}_h64x64x64x64_cosine_per-robot"
     suffix = "_tcp" if variant == "tcp" else ""
     return f"mlp_ned_scara_{size}_h64x64_cosine{suffix}"
 
@@ -59,8 +61,8 @@ def load_test(path, robot, count=None):
     return x, y
 
 
-def predict_model(directory, size, variant, robot, x):
-    name = model_name(size, variant)
+def predict_model(directory, size, variant, robot, x, name=None):
+    name = name or model_name(size, variant)
     directory = Path(directory)
     config = json.loads((directory / f"{name}.json").read_text(encoding="utf-8"))
     if robot not in config["robots"]:

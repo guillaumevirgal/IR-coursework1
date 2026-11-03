@@ -162,7 +162,7 @@ def in_this_sweep(path):
     """Keep only this activation/architecture sweep's own checkpoints.
 
     models/ also holds later, unrelated families (TCP loss, directional
-    fallback, total16000/20000) trained on different objectives or datasets;
+    fallback, total16000) trained on different objectives or datasets;
     mixing those into this comparison would corrupt the "lowest validation
     joint MSE per size" selection and the ReLU-vs-tanh comparison. models/tanh/
     and models/bigger/ are wholly this sweep's own. At the top level, keep only

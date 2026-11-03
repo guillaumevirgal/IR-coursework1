@@ -1,0 +1,17 @@
+{
+  "samples": 16000,
+  "seed": 42,
+  "splits": {
+    "small": 1000,
+    "medium": 5000,
+    "large": 15000,
+    "test": 1000
+  },
+  "audit_dir": "data/raw",
+  "nn_dir": "data/nn",
+  "splits_root": "data/nn/splits",
+  "worlds": {
+    "ned": "worlds/articulated.wbt",
+    "scara": "worlds/scara.wbt"
+  }
+}

@@ -12,10 +12,6 @@ evaluation and live control immediately without retraining anything.
   generate data, train and evaluate).
 - Matplotlib, only for figures — evaluation still writes all numbers without it.
 
-```bash
-python -m venv .venv
-./.venv/bin/python scripts/install_dependencies.py      # Windows: .venv\Scripts\python.exe
-```
 
 ## Fastest way to see results
 
@@ -33,7 +29,7 @@ checkpoints are already in `data/` and `models/`.
 
 | Step | Command | Needs Webots |
 |---|---|---|
-| 1. Generate data | `python scripts/run_dataset_generation.py both 16000 42` | yes |
+| 1. Generate data | `python scripts/generate_dataset.py both` (settings in `configs/dataset_generation.json`) | yes |
 | 2. Train | `python scripts/train_all_models.py` (all models; or one: `python scripts/train_mlp.py --size large --hidden 64 64 --loss joints`) | no |
 | 3. Task 4.A (FK evaluation) | `python scripts/compare_mlp_losses.py` | no |
 | 4. Task 4.B (Webots evaluation) | `python scripts/evaluate_mlp_webots.py` | yes |
@@ -49,7 +45,7 @@ to the scripts that need it, or set `WEBOTS_HOME`.
 | 1.A Joint control, TCP reading | `controllers/common/arm_controller.py`, `controllers/ned_simple/` |
 | 1.B Forward kinematics | `scripts/forward_kinematics_ned.py`, `scripts/forward_kinematics_scara.py` |
 | 1.C FK precision in Webots | `controllers/fk_precision/`, `scripts/run_fk_precision.sh`, `scripts/plot_fk_precision.py` |
-| 2 Dataset generation | `controllers/generate_dataset/`, `controllers/common/dataset_generator.py`, `scripts/run_dataset_generation.py` |
+| 2 Dataset generation | `controllers/generate_dataset/`, `controllers/common/dataset_generator.py`, `scripts/generate_dataset.py` |
 | 3 Training | `scripts/train_mlp.py`, `scripts/train_all_models.py`, `scripts/tcp_loss.py` |
 | 4.A / 4.B Evaluation | `scripts/compare_mlp_losses.py`, `scripts/evaluate_mlp_webots.py`, `scripts/evaluation_common.py`, `controllers/diagnose_mlp/` |
 | Architecture / activation sweep (Task 3 justification) | `scripts/evaluate_configurations.py`, `scripts/evaluate_configurations_webots.py` — write-up and ranking in [reports/configuration_evaluation/](reports/configuration_evaluation/README.md) |

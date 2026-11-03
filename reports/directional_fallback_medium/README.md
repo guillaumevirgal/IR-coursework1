@@ -4,7 +4,7 @@ The new dataset teaches the arm to point toward an unreachable request, then app
 
 New requests are certified outside the full joint-limited FK workspace using a conservative grid-cover bound or an analytic enclosing volume, with a minimum 5 mm clearance. Half the generated requests are within 100 mm of the accepted pose bank and half farther away. Query displacements span 15–600 mm from bank positions. Every label uses an original training pose with a Webots audit row. The requests are synthetic; no simulated TCP reading is invented at an impossible requested location.
 
-The medium experiment reuses only unreachable test requested XYZ from `data/nn/directional_fallback` for comparison on identical inputs. Its fallback joint labels are recomputed using the medium training bank only. The shared test group need not retain the medium bank's near/far proportions.
+The medium experiment reuses only unreachable test requested XYZ from `extras/unreachable_targets/data/nn/directional_fallback` for comparison on identical inputs. Its fallback joint labels are recomputed using the medium training bank only. The shared test group need not retain the medium bank's near/far proportions.
 
 Original reachable rows retain their labels. New query splits have independent seeds, and validation/test poses never supply training labels. This tests new requests against a fixed training reference bank. Accepted static poses do not guarantee collision-free motion, and the MLP can predict an unrecorded configuration. Its response beyond the sampled query distribution is unverified.
 
@@ -69,7 +69,7 @@ The test marker is reweighted to validation group proportions (2 reachable to 1 
 
 ## Run and use
 
-Run `python scripts/run_fallback_training.py --size medium --name directional_fallback_medium_repeat --test-requests data/nn/directional_fallback` from the repository root; add `--webots PATH` for physics measurements. Existing paths/checkpoints are refused. Data: `data/nn/directional_fallback_medium`; policy audit: `data/raw/directional_fallback_medium`. `manifest.json` records dataset hashes and `source_integrity.json` confirms original data and checkpoint hashes.
+Run `python extras/unreachable_targets/run_fallback_training.py --size medium --name directional_fallback_medium_repeat --test-requests extras/unreachable_targets/data/nn/directional_fallback` from the repository root; add `--webots PATH` for physics measurements. Existing paths/checkpoints are refused. Data: `extras/unreachable_targets/data/nn/directional_fallback_medium`; policy audit: `extras/unreachable_targets/data/raw/directional_fallback_medium`. `manifest.json` records dataset hashes and `source_integrity.json` confirms original data and checkpoint hashes.
 
 In Webots keep controller `mlp_ik` and append `"--model=mlp_ned_scara_medium_h64x64_cosine_directional_fallback_medium"` after `"ned"` or `"scara"` in `controllerArgs`. The network supplies the learned fallback response.
 
