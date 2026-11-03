@@ -3,9 +3,9 @@
 Reports, per robot, the normalised joint error and the TCP error obtained by
 sending the predicted joints through that robot's forward kinematics.
 
-Usage (after scripts/train_sklearn_baseline.py):
-    python scripts/evaluate_sklearn_baseline.py                 # validation split
-    python scripts/evaluate_sklearn_baseline.py --split test    # independent test split
+Usage (after extras/sklearn_baseline/train_sklearn_baseline.py):
+    python extras/sklearn_baseline/evaluate_sklearn_baseline.py                 # validation split
+    python extras/sklearn_baseline/evaluate_sklearn_baseline.py --split test    # independent test split
 """
 
 import argparse
@@ -16,9 +16,9 @@ from pathlib import Path
 
 import numpy as np
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-from scripts.ann_data import load_inputs_targets
+from scripts.load_dataset import load_inputs_targets
 from scripts.robot_config import FORWARD_KINEMATICS, JOINT_LIMITS, ROBOTS, denormalise
 
 DATA = ROOT / "data" / "nn" / "splits"

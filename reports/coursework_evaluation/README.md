@@ -41,8 +41,8 @@ These files are a verified run snapshot. Complete per-sample predictions and red
 ## Run again
 
 ```bash
-python scripts/compare_mlp_losses.py
-python scripts/evaluate_mlp_webots.py
+python scripts/evaluate_task4a.py
+python scripts/evaluate_task4b.py
 ```
 
 The second command needs Webots. On Windows use `--webots` if the launcher cannot be found automatically. Both scripts support `--output` for a separate run folder.

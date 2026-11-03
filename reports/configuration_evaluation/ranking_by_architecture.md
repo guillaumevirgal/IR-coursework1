@@ -10,7 +10,7 @@ ranking as the README's three picks — e.g. 64-64-64-64 tanh's best result
 comes from the medium set, not large.
 
 Source: `reports/configuration_evaluation/results.json`, produced by
-`python scripts/evaluate_configurations.py`. All 33 configurations are
+`python extras/configuration_sweep/evaluate_configurations.py`. All 33 configurations are
 listed individually, with the same metrics, in [summary.csv](summary.csv)
 and [task4a_position.csv](task4a_position.csv).
 

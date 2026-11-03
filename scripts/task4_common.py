@@ -21,10 +21,10 @@ def draw_graphs(function_name, *args):
     so a machine without matplotlib still produces every result.
     """
     try:
-        from scripts import plot_mlp_evaluation
+        from extras.figures import plot_mlp_evaluation
     except ImportError:
         print("matplotlib not installed: skipping graphs "
-              "(run scripts/plot_mlp_evaluation.py later to draw them).")
+              "(run extras/figures/plot_mlp_evaluation.py later to draw them).")
         return False
     getattr(plot_mlp_evaluation, function_name)(*args)
     return True

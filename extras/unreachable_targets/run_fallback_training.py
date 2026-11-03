@@ -8,7 +8,7 @@ from a config, use extras/unreachable_targets/build_dataset.py instead.
 The default run writes new data, a new joint-loss checkpoint and a report.
 Existing experiment paths are refused. Original dataset/model files are hashed
 before and after the run. No existing checkpoint is fine-tuned or overwritten.
-Datasets live under extras/unreachable_targets/data; reports stay in reports/.
+Datasets live under extras/unreachable_targets/data; reports in extras/unreachable_targets/reports.
 """
 
 import argparse
@@ -26,19 +26,27 @@ from fallback_dataset import (
     fingerprint, read_csv, resolve_dataset_dir,
 )
 from scripts.robot_config import JOINT_LIMITS, denormalise
-from scripts.train_mlp import INPUTS, OUTPUTS
+from scripts.train_mlp import INPUTS, OUTPUTS, find_model
 from scripts.tcp_loss import tcp_and_jacobian
-from scripts.evaluation_common import write_csv
-from scripts.generate_mlp_diagnostics import load_model
-from scripts.webots_mlp_runner import run_webots
+from scripts.task4_common import write_csv
+from extras.diagnostics.generate_mlp_diagnostics import load_model
+from scripts.webots_runner import run_webots
 from scripts.generate_dataset import find_webots
+
+UNREACHABLE_MODELS = EXTRAS / "models"
+
+
+def model_file(name, suffix):
+    """Locate a checkpoint file in models/ or the extras/ model folders."""
+    return find_model(name, suffix)
+
 
 BASELINE = "mlp_ned_scara_large_h64x64_cosine"
 MODEL = BASELINE + "_directional_fallback"
 ORIGINAL = ROOT / "data/nn/splits"
 DATASET = EXTRAS / "data/nn/directional_fallback"
 AUDIT = EXTRAS / "data/raw/directional_fallback"
-REPORT = ROOT / "reports/directional_fallback"
+REPORT = EXTRAS / "reports/directional_fallback"
 
 
 def build_dataset(args):
@@ -123,6 +131,7 @@ def evaluate_webots(args, model_names=None):
         for model_name in (model_names or (BASELINE, MODEL)):
             cases = [{"label": f"case_{i}", "kind": row["kind"],
                       "point": tuple(float(row[a]) for a in "xyz")} for i, row in enumerate(selected)]
+            args.model_dir = model_file(model_name, ".json").parent
             measured = run_webots(robot, model_name, cases, args)
             if [r["label"] for r in measured] != [r["label"] for r in cases]:
                 raise RuntimeError("Missing or reordered Webots measurements")
@@ -142,9 +151,9 @@ def draw_report(summaries, measurements, manifest, args):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    from scripts.plot_mlp_evaluation import smooth_curve
-    history = read_csv(ROOT / f"models/{MODEL}_history.csv")
-    config = json.loads((ROOT / f"models/{MODEL}.json").read_text(encoding="utf-8"))
+    from extras.figures.plot_mlp_evaluation import smooth_curve
+    history = read_csv(model_file(MODEL, "_history.csv"))
+    config = json.loads((model_file(MODEL, ".json")).read_text(encoding="utf-8"))
     fig, ax = plt.subplots(figsize=(8, 4.5))
     epochs = [int(r["epoch"]) for r in history]
     ax.plot(epochs, smooth_curve([float(r["train_mse"]) for r in history]),
@@ -288,7 +297,7 @@ def compare_sizes(reference_dataset):
         collected = []
         for folder in (REPORT, reference_report):
             for row in read_csv(folder / filename):
-                config = json.loads((ROOT / f"models/{row['model']}.json").read_text(encoding="utf-8"))
+                config = json.loads((model_file(row['model'], ".json")).read_text(encoding="utf-8"))
                 size = config["size"]
                 original = row["model"] == f"mlp_ned_scara_{size}_h64x64_cosine"
                 collected.append({"size": size, "model": row["model"], "variant": "original" if original else "fallback",
@@ -372,7 +381,7 @@ def compare_models(args, names):
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    configs = {name: json.loads((ROOT / f"models/{name}.json").read_text()) for name in names}
+    configs = {name: json.loads((model_file(name, ".json")).read_text()) for name in names}
     labels = {}
     for name, config in configs.items():
         directory = config.get("splits_dir", "data/nn/splits")
@@ -433,7 +442,7 @@ def compare_models(args, names):
     fig, axes = plt.subplots(1, len(new_names), figsize=(7 * len(new_names), 4.5), squeeze=False)
     for ax, name in zip(axes[0], new_names):
         config = configs[name]
-        history = read_csv(ROOT / f"models/{name}_history.csv")
+        history = read_csv(model_file(name, "_history.csv"))
         keys = ("train_loss_m2", "val_loss_m2") if config["loss"] == "tcp" else ("train_mse", "val_mse")
         epochs = [int(r["epoch"]) for r in history]
         ax.plot(epochs, [float(r[keys[0]]) for r in history], color="#2878b5", label="Training")
@@ -479,7 +488,7 @@ def compare_models(args, names):
         "| New model | Best epoch | Training stopped at epoch | Best validation objective |",
         "|---|---:|---:|---:|"]
     for name in new_names:
-        history = read_csv(ROOT / f"models/{name}_history.csv")
+        history = read_csv(model_file(name, "_history.csv"))
         lines.append(f"| {labels[name].replace(chr(10), ' / ')} | {configs[name]['best_epoch']} | {history[-1]['epoch']} | {configs[name]['best_val_loss']:.8g} |")
     if measured_summary:
         lines += ["", "![Measured endpoint error](webots_comparison.png)", "",
@@ -490,7 +499,7 @@ def compare_models(args, names):
         f"python extras/unreachable_targets/run_fallback_training.py --name {args.name} --evaluate-models " + " ".join(names), "```",
         "Add `--webots PATH` to include the simulator measurements. Existing models are never retrained by this command."]
     (REPORT / "README.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
-    (REPORT / "model_provenance.json").write_text(json.dumps(fingerprint([ROOT / f"models/{n}.{ext}" for n in names for ext in ("json", "npz")]), indent=2), encoding="utf-8")
+    (REPORT / "model_provenance.json").write_text(json.dumps(fingerprint([model_file(n, f".{ext}") for n in names for ext in ("json", "npz")]), indent=2), encoding="utf-8")
 
 
 def main():
@@ -523,7 +532,7 @@ def main():
         parser.error("name must contain only letters, numbers, underscores or hyphens")
     BASELINE = f"mlp_ned_scara_{args.size}_h64x64_cosine"
     MODEL = BASELINE + "_" + args.name
-    DATASET, AUDIT, REPORT = (EXTRAS / f"data/nn/{args.name}", EXTRAS / f"data/raw/{args.name}", ROOT / f"reports/{args.name}")
+    DATASET, AUDIT, REPORT = (EXTRAS / f"data/nn/{args.name}", EXTRAS / f"data/raw/{args.name}", EXTRAS / f"reports/{args.name}")
     if args.train_extra < 4 or args.test_extra < 2 or args.epochs < 1 or args.seed < 0:
         parser.error("train-extra must be >= 4; test-extra >= 2; epochs >= 1; seed >= 0")
     if args.webots:
@@ -536,10 +545,10 @@ def main():
         REPORT.mkdir(exist_ok=True, parents=True)
         compare_models(args, args.evaluate_models)
         return
-    for path in (DATASET, AUDIT, REPORT, *(ROOT / f"models/{MODEL}{suffix}" for suffix in (".npz", ".json", "_history.csv"))):
+    for path in (DATASET, AUDIT, REPORT, *(model_file(MODEL, suffix) for suffix in (".npz", ".json", "_history.csv"))):
         if path.exists():
             raise FileExistsError(f"Refusing to overwrite experiment output: {path}")
-    sources = sorted(p for directory in (ROOT / "data", EXTRAS / "data", ROOT / "models") for p in directory.rglob("*")
+    sources = sorted(p for directory in (ROOT / "data", EXTRAS / "data", ROOT / "models", UNREACHABLE_MODELS) for p in directory.rglob("*")
                      if p.is_file() and "__pycache__" not in p.parts)
     before = fingerprint(sources)
     REPORT.mkdir(parents=True)
@@ -556,7 +565,8 @@ def main():
             return
         command = [sys.executable, str(ROOT / "scripts/train_mlp.py"), "--size", args.size, "--hidden", "64", "64",
                    "--loss", "joints", "--epochs", str(args.epochs), "--seed", str(args.seed),
-                   "--splits-dir", str(DATASET), "--model-name", MODEL]
+                   "--splits-dir", str(DATASET), "--model-name", MODEL,
+                   "--models-dir", str(UNREACHABLE_MODELS)]
         print(f"Training {MODEL}; progress is saved in {REPORT / 'training_output.txt'}", flush=True)
         with (REPORT / "training_output.txt").open("w", encoding="utf-8") as training_log:
             subprocess.run(command, check=True, cwd=ROOT, stdout=training_log, stderr=subprocess.STDOUT)
@@ -566,7 +576,7 @@ def main():
         draw_report(summaries, measurements, manifest, args)
         if args.test_requests:
             compare_sizes(args.test_requests)
-        model_paths = [ROOT / f"models/{name}.{ext}" for name in (BASELINE, MODEL) for ext in ("json", "npz")]
+        model_paths = [model_file(name, f".{ext}") for name in (BASELINE, MODEL) for ext in ("json", "npz")]
         (REPORT / "model_provenance.json").write_text(json.dumps(fingerprint(model_paths), indent=2), encoding="utf-8")
         print(f"Experiment report: {REPORT / 'README.md'}", flush=True)
     finally:

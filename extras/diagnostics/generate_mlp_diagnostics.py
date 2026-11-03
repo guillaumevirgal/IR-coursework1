@@ -8,7 +8,7 @@ from pathlib import Path
 import sys
 import tempfile
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 os.environ.setdefault("MPLCONFIGDIR", str(Path(tempfile.gettempdir()) / "mlp_diagnostics_mplconfig"))
 os.environ.setdefault("XDG_CACHE_HOME", str(Path(tempfile.gettempdir()) / "mlp_diagnostics_cache"))
 Path(os.environ["MPLCONFIGDIR"]).mkdir(parents=True, exist_ok=True)
@@ -28,11 +28,11 @@ INPUTS = ("is_scara", "is_ned", "x", "y", "z")
 WORLDS = {"ned": "articulated.wbt", "scara": "scara.wbt"}
 
 sys.path.insert(0, str(ROOT))
-from scripts.webots_mlp_runner import (  # noqa: E402
+from scripts.webots_runner import (  # noqa: E402
     write_cases, make_diagnostic_world, remove_world, run_webots,
 )
 from scripts.robot_config import FORWARD_KINEMATICS, JOINT_LIMITS, denormalise  # noqa: E402
-from scripts.train_mlp import MLP  # noqa: E402
+from scripts.train_mlp import MLP, find_model  # noqa: E402
 from scripts.numpy_neighbors import NumpyNearestNeighbors as cKDTree  # noqa: E402
 from scripts.forward_kinematics_ned import forward_kinematics_ned  # noqa: E402
 
@@ -57,13 +57,13 @@ def parse_args():
 
 
 def load_model(name, robot):
-    weights_path = MODELS / f"{name}.npz"
+    weights_path = find_model(name, ".npz")
     if not weights_path.is_file():
         raise FileNotFoundError(
             f"Missing model weights: {weights_path}. Train it first with "
             f"python scripts/train_mlp.py --size large --hidden 64 64"
         )
-    with (MODELS / f"{name}.json").open(encoding="utf-8") as source:
+    with find_model(name, ".json").open(encoding="utf-8") as source:
         config = json.load(source)
     if robot not in config["robots"]:
         raise ValueError(f"Model {name} was not trained on {robot}")

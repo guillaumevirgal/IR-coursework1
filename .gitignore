@@ -94,3 +94,5 @@ Thumbs.db
 *.swo
 *~
 poster/
+worlds/_demo_*.wbt
+worlds/._demo_*.wbproj

@@ -21,4 +21,4 @@ All 1,200 measured points in this saved run settled. Mean and standard deviation
 
 Joint angular axes use radians. SCARA lift uses the handout's squared error; plots convert m² to mm². Different joints have separate axes and units, so compare models within each panel.
 
-The evaluation scripts regenerate these figures automatically. To redraw existing exports only, run `python scripts/plot_mlp_evaluation.py`. Working outputs and full predictions are under `outputs/task4a/` and `outputs/task4b/`.
+The evaluation scripts regenerate these figures automatically. To redraw existing exports only, run `python extras/figures/plot_mlp_evaluation.py`. Working outputs and full predictions are under `outputs/task4a/` and `outputs/task4b/`.

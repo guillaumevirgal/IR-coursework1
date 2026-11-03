@@ -6,7 +6,9 @@ import shutil
 import subprocess
 import tempfile
 
-from scripts.run_dataset_generation import ROOT, WORLDS, find_webots
+from scripts.generate_dataset import ROOT, find_webots
+
+WORLDS = {"ned": "articulated.wbt", "scara": "scara.wbt"}
 
 
 def write_cases(path, cases):

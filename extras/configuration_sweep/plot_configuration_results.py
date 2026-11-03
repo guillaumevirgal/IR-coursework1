@@ -4,8 +4,8 @@ Figure-only script (matplotlib), so it is outside the coursework's library
 restriction and does not need to be submitted.
 
 Usage:
-    python scripts/evaluate_configurations.py
-    python scripts/plot_configuration_results.py
+    python extras/configuration_sweep/evaluate_configurations.py
+    python extras/configuration_sweep/plot_configuration_results.py
 """
 
 import csv
@@ -18,7 +18,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 RESULTS = ROOT / "reports" / "configuration_evaluation"
 FIGURES = RESULTS / "figures"
 ROBOTS = ("ned", "scara")

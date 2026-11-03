@@ -1,7 +1,7 @@
 """
 Task 3 - summarise every trained MLP on its validation set.
 
-For each run in RUNS it reads models/<name>.npz / .json / _history.csv,
+For each run in RUNS it reads <name>.npz / .json / _history.csv,
 recomputes the validation position error per robot (de-normalise -> FK), and
 writes, next to this script:
     validation_results.csv   one row per run (best epoch, MSE, errors in mm)
@@ -27,7 +27,7 @@ OUT = Path(__file__).resolve().parent
 ROOT = OUT.parents[2]
 sys.path.insert(0, str(ROOT))
 
-from scripts.train_mlp import INPUTS, MLP, MODELS, OUTPUTS, load_split, position_errors
+from scripts.train_mlp import INPUTS, MLP, MODELS, OUTPUTS, find_model, load_split, position_errors
 
 
 # (model file stem, label) in the order the experiments were run.
@@ -46,7 +46,7 @@ SURFACE, INK, INK_2, MUTED, GRID, AXIS = "#fcfcfb", "#0b0b0b", "#52514e", "#8987
 
 
 def read_history(name):
-    with (MODELS / f"{name}_history.csv").open(newline="", encoding="utf-8") as source:
+    with find_model(name, "_history.csv").open(newline="", encoding="utf-8") as source:
         rows = list(csv.DictReader(source))
     return {key: np.array([float(row[key]) for row in rows]) for key in ("epoch", "train_mse", "val_mse")}
 
@@ -54,13 +54,13 @@ def read_history(name):
 def load_model(name, config):
     hidden = config["hidden"] if isinstance(config["hidden"], list) else [config["hidden"]]
     model = MLP((len(INPUTS), *hidden, len(OUTPUTS)), np.random.default_rng(0))
-    stored = np.load(MODELS / f"{name}.npz")
+    stored = np.load(find_model(name, ".npz"))
     model.params = {key: stored[key] for key in model.params}
     return model, stored["mean"], stored["std"], hidden
 
 
 def evaluate(name, label):
-    with (MODELS / f"{name}.json").open(encoding="utf-8") as source:
+    with find_model(name, ".json").open(encoding="utf-8") as source:
         config = json.load(source)
     history = read_history(name)
     model, mean, std, hidden = load_model(name, config)

@@ -25,9 +25,9 @@ from matplotlib.lines import Line2D
 from matplotlib.ticker import MaxNLocator, FuncFormatter
 import numpy as np
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-from scripts.evaluation_common import SIZES, ROBOTS, load_test, model_name, predict_model
+from scripts.task4_common import SIZES, ROBOTS, load_test, model_name, predict_model
 from scripts.robot_config import JOINT_LIMITS
 from scripts.tcp_loss import tcp_loss_and_gradient
 

@@ -69,8 +69,8 @@ python scripts/train_mlp.py --size large --hidden 64 64 --loss tcp
 To evaluate only TCP-loss checkpoints, use the same `--losses tcp` selection in either coursework evaluation script:
 
 ```bash
-python scripts/compare_mlp_losses.py --losses tcp
-python scripts/evaluate_mlp_webots.py --losses tcp
+python scripts/evaluate_task4a.py --losses tcp
+python scripts/evaluate_task4b.py --losses tcp
 ```
 
 Both evaluate small, medium and large by default. Add `--sizes large` (or `--sizes small medium`) to select sizes. The first command evaluates all test rows using FK; the second evaluates the first 100 test rows per arm in headless Webots.
@@ -86,7 +86,7 @@ Note: the original README later says this argument is still accepted and that th
 On Windows, Webots is located automatically when possible. Otherwise pass its launcher explicitly, for example:
 
 ```powershell
-python scripts/evaluate_mlp_webots.py --webots "C:\Program Files\Webots\msys64\mingw64\bin\webots.exe"
+python scripts/evaluate_task4b.py --webots "C:\Program Files\Webots\msys64\mingw64\bin\webots.exe"
 ```
 
 ## Graph notes (section 5)

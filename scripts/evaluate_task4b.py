@@ -15,12 +15,12 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from scripts.evaluation_common import (
+from scripts.task4_common import (
     ROOT, SIZES, ROBOTS, digest, model_name, load_test, predict_model,
     position_statistics, write_csv, select_models, coverage, draw_graphs,
 )
 from scripts.robot_config import JOINT_LIMITS, denormalise
-from scripts.webots_mlp_runner import run_webots
+from scripts.webots_runner import run_webots
 
 
 def first_100(test_root, robot):

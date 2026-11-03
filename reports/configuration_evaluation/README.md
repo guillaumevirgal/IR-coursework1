@@ -5,8 +5,8 @@ both arms (1,000 points each) with the Task 4.A procedure. The procedure, metric
 and output files are described in the main `README.md`. To regenerate everything:
 
 ```bash
-python scripts/evaluate_configurations.py
-python scripts/plot_configuration_results.py
+python extras/configuration_sweep/evaluate_configurations.py
+python extras/configuration_sweep/plot_configuration_results.py
 ```
 
 For a ranking by architecture rather than by checkpoint (dataset size

@@ -17,9 +17,9 @@ Outputs in reports/configuration_evaluation/:
   test_sets/<robot>_test_first100.csv   the two reduced test sets
 
 Usage:
-    python scripts/evaluate_configurations.py      # Task 4.A first: picks the models
-    python scripts/evaluate_configurations_webots.py
-    python scripts/evaluate_configurations_webots.py --models mlp_ned_scara_large_h64x64x64x64_cosine_per-robot
+    python extras/configuration_sweep/evaluate_configurations.py      # Task 4.A first: picks the models
+    python extras/configuration_sweep/evaluate_configurations_webots.py
+    python extras/configuration_sweep/evaluate_configurations_webots.py --models mlp_ned_scara_large_h64x64x64x64_cosine_per-robot
 """
 
 import argparse
@@ -31,11 +31,13 @@ from types import SimpleNamespace
 
 import numpy as np
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from scripts.train_mlp import SPLITS
-from scripts.webots_mlp_runner import run_webots
+from scripts.webots_runner import run_webots
+
+SWEEP_MODELS = ROOT / "extras" / "configuration_sweep" / "models"
 
 RESULTS = ROOT / "reports" / "configuration_evaluation"
 ROBOTS = ("ned", "scara")
@@ -89,14 +91,14 @@ def main():
     summary, measurements = [], []
     for name in names:
         model = by_name[name]
-        # diagnose_mlp loads models/<path>; models may sit in sub-folders such as models/tanh/.
+        # Sweep checkpoints live in extras/configuration_sweep/models/ (sometimes in tanh/ or bigger/); the rest in models/.
         model_path = name if model["group"] == "." else f"{model['group']}/{name}"
         for robot in ROBOTS:
             print(f"{name} · {robot}: running {SAMPLES} targets in headless Webots...", flush=True)
             webots_args = SimpleNamespace(
                 webots=args.webots, output=RESULTS / "webots_work",
                 settle_time=args.settle_time, timeout=args.timeout,
-                model_dir=None, wall_timeout=None,
+                model_dir=SWEEP_MODELS if (SWEEP_MODELS / f"{model_path}.json").is_file() else None, wall_timeout=None,
             )
             rows = run_webots(robot, model_path, cases[robot], webots_args)
             if [row["label"] for row in rows] != [case["label"] for case in cases[robot]]:

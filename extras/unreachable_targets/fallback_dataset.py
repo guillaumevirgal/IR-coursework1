@@ -33,7 +33,7 @@ ROOT = EXTRAS.parents[1]
 sys.path.insert(0, str(ROOT))
 from scripts import forward_kinematics_ned as ned
 from scripts import forward_kinematics_scara as scara
-from scripts.evaluation_common import write_csv
+from scripts.task4_common import write_csv
 from scripts.numpy_neighbors import NumpyNearestNeighbors as cKDTree
 from scripts.robot_config import JOINT_LIMITS
 from scripts.tcp_loss import tcp_and_jacobian

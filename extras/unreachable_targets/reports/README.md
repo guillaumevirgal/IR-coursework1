@@ -44,11 +44,11 @@ Webots as well. For live control, keep controller `mlp_ik` and add
 `"--model=mlp_ned_scara_large_h64x64_cosine_directional_fallback"` after the
 robot-name argument in the world's `controllerArgs`.
 
-The saved [per-target Webots diagnostics](../outputs/mlp_diagnostics_directional_fallback/README.md)
+The saved [per-target Webots diagnostics](../../diagnostics/saved_results_directional_fallback/README.md)
 sit beside the earlier MLP outputs. To run them again:
 
 ```bash
-python scripts/generate_mlp_diagnostics.py --model mlp_ned_scara_large_h64x64_cosine_directional_fallback --output outputs/mlp_diagnostics_directional_fallback
+python extras/diagnostics/generate_mlp_diagnostics.py --model mlp_ned_scara_large_h64x64_cosine_directional_fallback --output extras/diagnostics/saved_results_directional_fallback
 ```
 
 Diagnostics read the training directory from this checkpoint's configuration,

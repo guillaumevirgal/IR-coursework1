@@ -6,8 +6,8 @@ from pathlib import Path
 
 import numpy as np
 
-from scripts.evaluation_common import physical_joint_errors, position_statistics, write_csv
-from scripts.evaluate_mlp_webots import first_100, summarize, validate_measurements
+from scripts.task4_common import physical_joint_errors, position_statistics, write_csv
+from scripts.evaluate_task4b import first_100, summarize, validate_measurements
 from scripts.train_mlp import INPUTS, OUTPUTS, JOINT_LIMITS, denormalise
 
 

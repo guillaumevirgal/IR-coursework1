@@ -16,7 +16,7 @@ evaluation and live control immediately without retraining anything.
 ## Fastest way to see results
 
 ```bash
-python scripts/compare_mlp_losses.py       # Task 4.A, FK-based, no Webots needed -> outputs/task4a/
+python scripts/evaluate_task4a.py       # Task 4.A, FK-based, no Webots needed -> outputs/task4a/
 ```
 
 Then, to see it move: open `worlds/articulated.wbt` (Ned) or `worlds/scara.wbt`
@@ -31,8 +31,8 @@ checkpoints are already in `data/` and `models/`.
 |---|---|---|
 | 1. Generate data | `python scripts/generate_dataset.py both` (settings in `configs/dataset_generation.json`) | yes |
 | 2. Train | `python scripts/train_all_models.py` (all models; or one: `python scripts/train_mlp.py --size large --hidden 64 64 --loss joints`) | no |
-| 3. Task 4.A (FK evaluation) | `python scripts/compare_mlp_losses.py` | no |
-| 4. Task 4.B (Webots evaluation) | `python scripts/evaluate_mlp_webots.py` | yes |
+| 3. Task 4.A (FK evaluation) | `python scripts/evaluate_task4a.py` | no |
+| 4. Task 4.B (Webots evaluation) | `python scripts/evaluate_task4b.py` | yes |
 | 5. Live control | open `worlds/articulated.wbt` or `worlds/scara.wbt` | yes |
 
 If Webots isn't found automatically, pass `--webots "<path to webots executable>"`
@@ -47,8 +47,8 @@ to the scripts that need it, or set `WEBOTS_HOME`.
 | 1.C FK precision in Webots | `controllers/fk_precision/`, `scripts/run_fk_precision.sh`, `scripts/plot_fk_precision.py` |
 | 2 Dataset generation | `controllers/generate_dataset/`, `controllers/common/dataset_generator.py`, `scripts/generate_dataset.py` |
 | 3 Training | `scripts/train_mlp.py`, `scripts/train_all_models.py`, `scripts/tcp_loss.py` |
-| 4.A / 4.B Evaluation | `scripts/compare_mlp_losses.py`, `scripts/evaluate_mlp_webots.py`, `scripts/evaluation_common.py`, `controllers/diagnose_mlp/` |
-| Architecture / activation sweep (Task 3 justification) | `scripts/evaluate_configurations.py`, `scripts/evaluate_configurations_webots.py` — write-up and ranking in [reports/configuration_evaluation/](reports/configuration_evaluation/README.md) |
+| 4.A / 4.B Evaluation | `scripts/evaluate_task4a.py`, `scripts/evaluate_task4b.py`, `scripts/task4_common.py`, `controllers/diagnose_mlp/` |
+| Architecture / activation sweep (Task 3 justification) | `extras/configuration_sweep/evaluate_configurations.py`, `extras/configuration_sweep/evaluate_configurations_webots.py` — write-up and ranking in [reports/configuration_evaluation/](reports/configuration_evaluation/README.md) |
 | Live neural IK | `controllers/mlp_ik/mlp_ik.py` |
 | Shared joint limits and normalisation | `scripts/robot_config.py` |
 
@@ -74,7 +74,7 @@ options: `--size small|medium|large`, `--hidden`, `--loss joints|tcp`,
 list (every trial model, not just the main ones) is in
 [reports/README_extra.md](reports/README_extra.md).
 
-`compare_mlp_losses.py` (Task 4.A, FK-based) and `evaluate_mlp_webots.py`
+`evaluate_task4a.py` (Task 4.A, FK-based) and `evaluate_task4b.py`
 (Task 4.B, first 100 points per arm in headless Webots) both score every
 small/medium/large checkpoint without retraining; see `--help` for
 `--losses`, `--sizes`, `--output`, `--webots`. Saved, verified runs:
@@ -84,7 +84,7 @@ To change the live model in `worlds/articulated.wbt` / `scara.wbt`: select
 the `ARM` node, edit `controllerArgs` (robot name first, then `--model=...`),
 save and reset.
 
-Diagnostics (per-target Webots plots): `python scripts/generate_mlp_diagnostics.py`.
+Diagnostics (per-target Webots plots): `python extras/diagnostics/generate_mlp_diagnostics.py`.
 
 ## Further reading
 
@@ -92,9 +92,9 @@ Diagnostics (per-target Webots plots): `python scripts/generate_mlp_diagnostics.
   vs per-robot), 36 configurations: [reports/configuration_evaluation/README.md](reports/configuration_evaluation/README.md),
   ranked by architecture in [ranking_by_architecture.md](reports/configuration_evaluation/ranking_by_architecture.md).
 - Saved coursework evaluation runs: [reports/coursework_evaluation/README.md](reports/coursework_evaluation/README.md).
-- Unreachable-target experiment: [reports/README_unreachable_targets.md](reports/README_unreachable_targets.md).
+- Unreachable-target experiment: [extras/unreachable_targets/reports/README.md](extras/unreachable_targets/reports/README.md).
 - Full per-checkpoint training commands and other condensed detail: [reports/README_extra.md](reports/README_extra.md).
-- scikit-learn baseline: `python scripts/train_sklearn_baseline.py`, then `python scripts/evaluate_sklearn_baseline.py [--split test]`.
+- scikit-learn baseline: `python extras/sklearn_baseline/train_sklearn_baseline.py`, then `python extras/sklearn_baseline/evaluate_sklearn_baseline.py [--split test]`.
 
 ## Reproducibility
 
@@ -102,4 +102,3 @@ Diagnostics (per-target Webots plots): `python scripts/generate_mlp_diagnostics.
 - Datasets are in `data/`, trained models in `models/`.
 - Seeds: dataset generation `42`, MLP training `2026` (`--seed`), scikit-learn baseline `42`, unreachable-target experiment `2026`.
 - Tests: `python -m unittest discover -s tests`.
-- Submission ZIP: `python scripts/make_submission_zip.py`.

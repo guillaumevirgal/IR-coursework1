@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 TRAIN = ["scripts/train_mlp.py"]
 
 # (checkpoint name, extra train_mlp.py arguments)
-REACHABLE = [
+REACHABLE = [  # all saved to extras/configuration_sweep/models/ (see main)
     ("mlp_ned_scara_small_h64x64_cosine", ["--size", "small", "--hidden", "64", "64", "--loss", "joints"]),
     ("mlp_ned_scara_medium_h64x64_cosine", ["--size", "medium", "--hidden", "64", "64", "--loss", "joints"]),
     ("mlp_ned_scara_large_h64x64_cosine", ["--size", "large", "--hidden", "64", "64", "--loss", "joints"]),
@@ -31,18 +31,21 @@ REACHABLE = [
     ("mlp_ned_scara_small_h64", ["--size", "small", "--hidden", "64", "--decay", "none"]),
 ]
 # unreachable-target experiment: trained on the included directional_fallback splits
-UNREACHABLE = [
+UNREACHABLE = [  # all saved to extras/configuration_sweep/models/ (see main)
     (f"mlp_ned_scara_total{n}_3to1_{loss}",
      ["--size", "large", "--hidden", "64", "64", "--loss", loss,
-      "--splits-dir", f"extras/unreachable_targets/data/nn/directional_fallback_total_{n}"])
+      "--splits-dir", f"extras/unreachable_targets/data/nn/directional_fallback_total_{n}",
+      "--models-dir", "extras/unreachable_targets/models"])
     for n in (16000,) for loss in ("joints", "tcp")
 ] + [
     ("mlp_ned_scara_large_h64x64_cosine_directional_fallback",
      ["--size", "large", "--hidden", "64", "64", "--loss", "joints",
-      "--splits-dir", "extras/unreachable_targets/data/nn/directional_fallback"]),
+      "--splits-dir", "extras/unreachable_targets/data/nn/directional_fallback",
+      "--models-dir", "extras/unreachable_targets/models"]),
     ("mlp_ned_scara_medium_h64x64_cosine_directional_fallback_medium",
      ["--size", "medium", "--hidden", "64", "64", "--loss", "joints",
-      "--splits-dir", "extras/unreachable_targets/data/nn/directional_fallback_medium"]),
+      "--splits-dir", "extras/unreachable_targets/data/nn/directional_fallback_medium",
+      "--models-dir", "extras/unreachable_targets/models"]),
 ]
 
 
@@ -53,7 +56,8 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="print the commands without running them")
     args = parser.parse_args()
 
-    for name, extra in REACHABLE + UNREACHABLE:
+    sweep = ["--models-dir", "extras/configuration_sweep/models"]
+    for name, extra in [(n, e + sweep) for n, e in REACHABLE] + UNREACHABLE:
         if args.only and args.only not in name:
             continue
         command = [sys.executable, *TRAIN, *extra, "--model-name", name + args.suffix]

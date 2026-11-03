@@ -1,6 +1,6 @@
 """Task 4.A evaluation of every saved MLP configuration (size, depth, width, activation).
 
-For each model under models/ (recursively) and each arm's independent test set:
+For each model under extras/configuration_sweep/models/ and the sweep entries in models/ and each arm's independent test set:
   1. feed (x, y, z)_true to the model,
   2. de-normalise the predicted joints (theta_pred, d_pred),
   3. apply the Task 1.B forward kinematics,
@@ -17,7 +17,7 @@ test error. The validation TCP error is also computed and reported in summary.cs
 for reference, but it does not drive the selection.
 
 Usage:
-    python scripts/evaluate_configurations.py
+    python extras/configuration_sweep/evaluate_configurations.py
 """
 
 import csv
@@ -27,12 +27,13 @@ from pathlib import Path
 
 import numpy as np
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from scripts.train_mlp import FORWARD_KINEMATICS, INPUTS, JOINT_LIMITS, MLP, OUTPUTS, SPLITS, denormalise
 
 MODELS = ROOT / "models"
+SWEEP_MODELS = ROOT / "extras" / "configuration_sweep" / "models"
 OUTPUT = ROOT / "reports" / "configuration_evaluation"
 ROBOTS = ("ned", "scara")
 SIZES = ("small", "medium", "large")
@@ -114,7 +115,7 @@ def evaluate(config_path, tests, validation):
     config, hidden, activation, model, mean, std = load_model(config_path)
     entry = {
         "name": config_path.stem,
-        "group": config_path.parent.relative_to(MODELS).as_posix() or ".",
+        "group": config_path.parent.relative_to(SWEEP_MODELS if SWEEP_MODELS in (config_path.parent, *config_path.parents) else MODELS).as_posix() or ".",
         "size": config["size"],
         "hidden": hidden,
         "depth": len(hidden),
@@ -164,33 +165,26 @@ def in_this_sweep(path):
     models/ also holds later, unrelated families (TCP loss, directional
     fallback, total16000) trained on different objectives or datasets;
     mixing those into this comparison would corrupt the "lowest validation
-    joint MSE per size" selection and the ReLU-vs-tanh comparison. models/tanh/
-    and models/bigger/ are wholly this sweep's own. At the top level, keep only
-    the plain ReLU baselines (h64x64_cosine, no further suffix) plus any name
-    containing "_tanh" or "_per-robot".
+    joint MSE per size" selection and the ReLU-vs-tanh comparison. Everything
+    under extras/configuration_sweep/models/ is this sweep's own, apart from
+    the TCP-loss checkpoints. In models/, keep only names ending "_per-robot".
     """
 
-    if path.parent.name in ("tanh", "bigger"):
-        return True
     name = path.stem
-    if name.endswith("_tanh") or name.endswith("_per-robot"):
-        return True
-    return name in (
-        "mlp_ned_scara_small_h64x64_cosine",
-        "mlp_ned_scara_medium_h64x64_cosine",
-        "mlp_ned_scara_large_h64x64_cosine",
-    )
+    if SWEEP_MODELS in path.parents:
+        return not name.endswith("_tcp") and name not in ("mlp_ned_scara_small_h64", "mlp_ned_scara_small_h64x64")
+    return name.endswith("_per-robot")
 
 
 def main():
     tests = {robot: load_rows(robot, "test") for robot in ROBOTS}
     validation = {size: {robot: load_rows(robot, f"validation_{size}") for robot in ROBOTS} for size in SIZES}
     configs = sorted(
-        path for path in MODELS.rglob("*.json")
+        path for root in (MODELS, SWEEP_MODELS) for path in root.rglob("*.json")
         if path.with_suffix(".npz").is_file() and in_this_sweep(path)
     )
     if not configs:
-        raise FileNotFoundError(f"No model .json/.npz pairs under {MODELS}")
+        raise FileNotFoundError(f"No model .json/.npz pairs under {MODELS} or {SWEEP_MODELS}")
     results = [evaluate(path, tests, validation) for path in configs]
 
     selected = {}

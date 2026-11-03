@@ -1,4 +1,4 @@
-"""Evaluate the saved MLPs listed in configs/compare_mlp_losses.json on the same independent tests.
+"""Evaluate the saved MLPs listed in configs/evaluate_task4a.json on the same independent tests.
 
 The model list lives in the config file, so changing which checkpoints are compared
 does not need a code change. Run after training them with scripts/train_mlp.py.
@@ -17,12 +17,12 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from scripts.robot_config import FORWARD_KINEMATICS, JOINT_LIMITS, denormalise
-from scripts.evaluation_common import (
+from scripts.task4_common import (
     ROOT, SIZES, ROBOTS, digest, load_test, predict_model,
     physical_joint_errors, position_statistics, write_csv, draw_graphs,
 )
 
-DEFAULT_CONFIG = ROOT / "configs/compare_mlp_losses.json"
+DEFAULT_CONFIG = ROOT / "configs/evaluate_task4a.json"
 
 
 def evaluate(directory, model, robot, *, test_root=None, joint_rows=None, predictions=None):
@@ -69,7 +69,7 @@ def evaluate(directory, model, robot, *, test_root=None, joint_rows=None, predic
 
 def write_task4a_report(output, rows, joints, missing, models):
     lines = ["# Task 4.A: independent test evaluation", "",
-        "Models listed in `configs/compare_mlp_losses.json`. All test samples; saved checkpoints only. TCP positions are calculated with FK after controller-equivalent joint-limit clipping.", "",
+        "Models listed in `configs/evaluate_task4a.json`. All test samples; saved checkpoints only. TCP positions are calculated with FK after controller-equivalent joint-limit clipping.", "",
         "Statistics use population standard deviation (`ddof=0`). Angular error is signed `atan2(sin(true-predicted), cos(true-predicted))` in rad. SCARA lift uses the handout's squared displacement error in m². Normalised joint RMSE is additional and does not replace these physical per-joint statistics.", "",
         "## Position error", "", "| Size | Model | Robot | Samples | Mean (mm) | Std (mm) | RMSE (mm) |",
         "|---|---|---|---:|---:|---:|---:|"]

@@ -4,8 +4,8 @@ This is the off-the-shelf comparison point for the NumPy MLP in train_mlp.py.
 Input  [is_scara, is_ned, x, y, z]  ->  output normalised joints [q1, q2, q3].
 The random seed is fixed (RANDOM_STATE) so the run is repeatable.
 
-Usage:  python scripts/train_sklearn_baseline.py
-Then:   python scripts/evaluate_sklearn_baseline.py [--split test]
+Usage:  python extras/sklearn_baseline/train_sklearn_baseline.py
+Then:   python extras/sklearn_baseline/evaluate_sklearn_baseline.py [--split test]
 """
 
 import json
@@ -18,9 +18,9 @@ from sklearn.neural_network import MLPRegressor
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-from scripts.ann_data import load_inputs_targets
+from scripts.load_dataset import load_inputs_targets
 from scripts.robot_config import ROBOTS
 
 DATA = ROOT / "data" / "nn" / "splits"

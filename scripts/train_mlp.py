@@ -29,6 +29,15 @@ from scripts.tcp_loss import tcp_loss_and_gradient
 
 SPLITS = ROOT / "data" / "nn" / "splits"
 MODELS = ROOT / "models"
+# models/ holds the chosen 4x64 family; earlier and experimental checkpoints live under extras/.
+MODEL_DIRS = (MODELS, ROOT / "extras" / "configuration_sweep" / "models",
+              ROOT / "extras" / "unreachable_targets" / "models")
+
+
+def find_model(name, suffix):
+    """Path of checkpoint file `name + suffix`, searching models/ and the extras/ model folders."""
+    return next((d / f"{name}{suffix}" for d in MODEL_DIRS if (d / f"{name}{suffix}").is_file()),
+                MODELS / f"{name}{suffix}")
 INPUTS = ("is_scara", "is_ned", "x", "y", "z")
 OUTPUTS = ("q1", "q2", "q3")
 
@@ -171,6 +180,7 @@ def parse_args():
     parser.add_argument("--activation", choices=("relu", "tanh", "per-robot"), default="relu",
                         help="hidden activation; per-robot = tanh for Ned rows, ReLU for SCARA rows")
     parser.add_argument("--model-name", help="distinct checkpoint name; refuses to replace existing files")
+    parser.add_argument("--models-dir", type=Path, default=MODELS, help="where to save the checkpoint (default: models/)")
     args = parser.parse_args()
     if args.epochs < 1 or args.batch < 1 or args.patience < 1:
         parser.error("epochs, batch and patience must be positive")
@@ -191,7 +201,7 @@ def main():
         name += f"_{args.activation}"
     if args.loss == "tcp" and not args.model_name:
         name += "_tcp"
-    if args.model_name and any((MODELS / f"{name}{suffix}").exists()
+    if args.model_name and any((args.models_dir / f"{name}{suffix}").exists()
                                for suffix in (".npz", ".json", "_history.csv")):
         raise FileExistsError(f"Checkpoint {name} already exists; choose a new model-name")
 
@@ -290,14 +300,14 @@ def main():
         print(f"{robot}: validation {'desired TCP' if has_policy_targets else 'position'} error {errors.mean() * 1000:.2f} "
               f"± {errors.std() * 1000:.2f} mm (n={len(errors)})")
 
-    MODELS.mkdir(exist_ok=True)
-    np.savez(MODELS / f"{name}.npz", mean=mean, std=std, **model.params)
-    with (MODELS / f"{name}_history.csv").open("w", newline="", encoding="utf-8") as destination:
+    args.models_dir.mkdir(parents=True, exist_ok=True)
+    np.savez(args.models_dir / f"{name}.npz", mean=mean, std=std, **model.params)
+    with (args.models_dir / f"{name}_history.csv").open("w", newline="", encoding="utf-8") as destination:
         writer = csv.writer(destination, lineterminator="\n")
         columns = ("train_mse", "val_mse") if args.loss == "joints" else ("train_loss_m2", "val_loss_m2")
         writer.writerow(("epoch", "lr", *columns))
         writer.writerows(history)
-    with (MODELS / f"{name}.json").open("w", encoding="utf-8") as destination:
+    with (args.models_dir / f"{name}.json").open("w", encoding="utf-8") as destination:
         dataset_path = args.splits_dir.resolve()
         dataset_path = dataset_path.relative_to(ROOT) if dataset_path.is_relative_to(ROOT) else dataset_path
         metadata = {**vars(args), "splits_dir": dataset_path.as_posix(), "best_epoch": best["epoch"], "best_val_loss": best["val_loss"],
@@ -307,7 +317,7 @@ def main():
         if args.loss == "joints":
             metadata["best_val_mse"] = best["val_loss"]
         json.dump(metadata, destination, indent=2)
-    print(f"Saved {MODELS / name}.npz")
+    print(f"Saved {args.models_dir / name}.npz")
 
 
 if __name__ == "__main__":
