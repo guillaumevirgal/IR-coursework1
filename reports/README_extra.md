@@ -44,7 +44,7 @@ away first or pass `--model-name`.
 
 ## Dataset generation (section 2, opening)
 
-The generator writes the audit; when it finishes, it derives the ready-to-train master CSV. The runner then creates nested train/validation sets and an independent test set. The visualiser reads the raw audit so measurements and rejected attempts remain inspectable.
+The generator writes the audit; when it finishes, it derives the ready-to-train master CSV. The runner then creates nested train/validation sets and an independent test set.
 
 ## Resuming (section 2)
 
