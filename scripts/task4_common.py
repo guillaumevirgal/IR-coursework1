@@ -116,24 +116,3 @@ def write_csv(path, rows):
         writer = csv.DictWriter(destination, fieldnames=list(rows[0]), lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
-
-
-def select_models(directory, sizes=SIZES, losses=("joints", "tcp")):
-    """Never silently drop missing sizes: return both available and missing."""
-    available, missing = [], []
-    for size in sizes:
-        for loss in losses:
-            variant = "existing_joints" if loss == "joints" else "tcp"
-            name = model_name(size, variant)
-            present = all((Path(directory) / f"{name}.{ext}").is_file() for ext in ("json", "npz"))
-            (available if present else missing).append((size, variant))
-    if not available:
-        raise FileNotFoundError(f"No selected saved models found in {directory}")
-    return available, missing
-
-
-def coverage(available, losses):
-    return {loss: {
-        "available_sizes": [size for size in SIZES if (size, "existing_joints" if loss == "joints" else "tcp") in available],
-        "all_three_sizes_available": all((size, "existing_joints" if loss == "joints" else "tcp") in available for size in SIZES),
-    } for loss in losses}

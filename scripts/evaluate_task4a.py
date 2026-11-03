@@ -37,7 +37,7 @@ def evaluate(directory, model, robot, *, test_root=None, joint_rows=None, predic
     errors = np.linalg.norm(fk_positions - x[:, 2:5], axis=1) * 1000.0
     joint_errors, units = physical_joint_errors(robot, true_q, command)
     row = {
-        "size": size, "robot": robot, "variant": variant, "samples": len(x),
+        "size": size, "robot": robot, "variant": variant, "model": name, "samples": len(x),
         **position_statistics(errors),
         "raw_joint_rmse_normalised": float(np.sqrt(np.mean((prediction - y) ** 2))),
         "clipped_joint_rmse_normalised": float(np.sqrt(np.mean((np.clip(prediction, -1, 1) - y) ** 2))),

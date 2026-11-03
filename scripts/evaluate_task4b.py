@@ -2,6 +2,7 @@
 
 Uses the saved networks, controller-equivalent clipping, joint sensors and
 Supervisor TCP measurements. No FK values substitute for measured TCPs.
+The models evaluated are the ones listed in configs/evaluate_task4a.json.
 """
 
 import argparse
@@ -16,8 +17,8 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from scripts.task4_common import (
-    ROOT, SIZES, ROBOTS, digest, model_name, load_test, predict_model,
-    position_statistics, write_csv, select_models, coverage, draw_graphs,
+    ROOT, ROBOTS, digest, load_test, predict_model,
+    position_statistics, write_csv, draw_graphs,
 )
 from scripts.robot_config import JOINT_LIMITS, denormalise
 from scripts.webots_runner import run_webots
@@ -56,14 +57,14 @@ def validate_measurements(rows, cases, expected_raw, robot):
             raise RuntimeError(f"Wrong joint command in Webots row {i + 1}")
 
 
-def summarize(size, variant, robot, measured):
+def summarize(size, variant, name, robot, measured):
     targets = np.array([[float(row[a]) for a in "xyz"] for row in measured])
     actual = np.array([[float(row[f"webots_{a}"]) for a in "xyz"] for row in measured])
     fk = np.array([[float(row[f"fk_{a}"]) for a in "xyz"] for row in measured])
     errors = np.linalg.norm(actual - targets, axis=1) * 1000
     fk_errors = np.linalg.norm(fk - targets, axis=1) * 1000
     settled = sum(row["settled"].lower() == "true" for row in measured)
-    return {"size": size, "variant": variant, "robot": robot, "samples": len(measured),
+    return {"size": size, "variant": variant, "model": name, "robot": robot, "samples": len(measured),
         **position_statistics(errors), "settled_count": settled, "timeout_count": len(measured) - settled,
         "all_samples_settled": settled == len(measured),
         "fk_first100_mean_mm": float(fk_errors.mean()), "fk_first100_std_mm": float(fk_errors.std(ddof=0)),
@@ -96,8 +97,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model-dir", type=Path, default=ROOT / "models")
     parser.add_argument("--test-root", type=Path, default=ROOT / "data/nn/splits")
-    parser.add_argument("--sizes", nargs="+", choices=SIZES, default=list(SIZES))
-    parser.add_argument("--losses", nargs="+", choices=("joints", "tcp"), default=["joints", "tcp"])
+    parser.add_argument("--config", type=Path, default=ROOT / "configs/evaluate_task4a.json",
+                        help="JSON list of models to evaluate (shared with evaluate_task4a.py)")
     parser.add_argument("--robot", choices=(*ROBOTS, "both"), default="both")
     parser.add_argument("--webots", type=Path, help="Webots launcher, including Windows webots.exe")
     parser.add_argument("--settle-time", type=float, default=0.25, help="continuous simulated seconds within joint tolerance")
@@ -110,34 +111,38 @@ def main():
     args.output = args.output.resolve()
     args.model_dir = args.model_dir.resolve()
     args.output.mkdir(parents=True, exist_ok=True)
-    available, missing = select_models(args.model_dir, args.sizes, args.losses)
+    models = json.loads(args.config.read_text(encoding="utf-8"))["models"]
+    available = [m for m in models if all((args.model_dir / f"{m['name']}.{ext}").is_file() for ext in ("json", "npz"))]
+    missing = [m for m in models if m not in available]
+    if not available:
+        raise FileNotFoundError(f"No configured checkpoints found in {args.model_dir}")
     robots = ROBOTS if args.robot == "both" else (args.robot,)
-    for size, variant in missing:
-        print(f"NOT EVALUATED: missing checkpoint {model_name(size, variant)}; recorded in coverage")
+    for model in missing:
+        print(f"NOT EVALUATED: missing checkpoint {model['name']}; recorded in coverage")
     inputs, cases = {}, {}
     for robot in robots:
         inputs[robot], cases[robot], reduced = first_100(args.test_root, robot)
         write_csv(args.output / "test_sets" / f"{robot}_test_first100.csv", reduced)
     # Load every model before starting any simulation to catch invalid files early.
-    expected = {(size, variant, robot): predict_model(args.model_dir, size, variant, robot, inputs[robot])[0]
-                for size, variant in available for robot in robots}
+    expected = {(m["name"], robot): predict_model(args.model_dir, m["size"], m["variant"], robot, inputs[robot], name=m["name"])[0]
+                for m in available for robot in robots}
     summary, predictions = [], []
     metadata = {"task": "4.B", "execution_complete": False, "robots": list(robots), "std_ddof": 0,
         "test_selection": "first 100 file rows, no shuffle, no substitution",
-        "coursework_coverage": coverage(available, args.losses),
+        "config": str(args.config.resolve().relative_to(ROOT)) if args.config.resolve().is_relative_to(ROOT) else str(args.config),
         "both_arms_selected": set(robots) == set(ROBOTS),
-        "missing_models": [{"size": s, "variant": v} for s, v in missing],
+        "missing_models": [{"name": m["name"]} for m in missing],
         "settle_time_s": args.settle_time, "timeout_s": args.timeout,
         "test_sha256": {r: digest(args.test_root / r / "test.csv") for r in robots},
-        "weights_sha256": {model_name(s, v): digest(args.model_dir / f"{model_name(s, v)}.npz") for s, v in available}}
+        "weights_sha256": {m["name"]: digest(args.model_dir / f"{m['name']}.npz") for m in available}}
     save_results(args, summary, predictions, metadata)
     try:
-        for size, variant in available:
+        for model in available:
+            size, variant, name = model["size"], model["variant"], model["name"]
             for robot in robots:
-                name = model_name(size, variant)
                 measured = run_webots(robot, name, cases[robot], args)
-                validate_measurements(measured, cases[robot], expected[size, variant, robot], robot)
-                summary.append(summarize(size, variant, robot, measured))
+                validate_measurements(measured, cases[robot], expected[name, robot], robot)
+                summary.append(summarize(size, variant, name, robot, measured))
                 predictions.extend({"size": size, "variant": variant, "model": name,
                                     "sample_index": i + 1, **row} for i, row in enumerate(measured))
                 save_results(args, summary, predictions, metadata)

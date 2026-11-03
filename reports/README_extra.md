@@ -15,7 +15,7 @@ splits; the rest are one-off trials, run individually with `train_mlp.py` (or
 |---|---|
 | `mlp_ned_scara_small_h64x64_cosine` | `python scripts/train_mlp.py --size small --hidden 64 64 --loss joints` |
 | `mlp_ned_scara_medium_h64x64_cosine` | `python scripts/train_mlp.py --size medium --hidden 64 64 --loss joints` |
-| `mlp_ned_scara_large_h64x64_cosine` (default live model) | `python scripts/train_mlp.py --size large --hidden 64 64 --loss joints` |
+| `mlp_ned_scara_large_h64x64_cosine` | `python scripts/train_mlp.py --size large --hidden 64 64 --loss joints` |
 | `mlp_ned_scara_small_h64x64_cosine_tcp` | `python scripts/train_mlp.py --size small --hidden 64 64 --loss tcp` |
 | `mlp_ned_scara_medium_h64x64_cosine_tcp` | `python scripts/train_mlp.py --size medium --hidden 64 64 --loss tcp` |
 | `mlp_ned_scara_large_h64x64_cosine_tcp` | `python scripts/train_mlp.py --size large --hidden 64 64 --loss tcp` |
@@ -64,22 +64,17 @@ python scripts/train_mlp.py --size medium --hidden 64 64 --loss tcp
 python scripts/train_mlp.py --size large --hidden 64 64 --loss tcp
 ```
 
-## Evaluating TCP-loss checkpoints only (section 5)
+## Choosing which checkpoints to evaluate
 
-To evaluate only TCP-loss checkpoints, use the same `--losses tcp` selection in either coursework evaluation script:
+Both coursework evaluation scripts read the model list from `configs/evaluate_task4a.json`
+(each entry has `size`, `variant` and the checkpoint `name`). To compare other checkpoints, edit that file, or pass another file with `--config`:
 
 ```bash
-python scripts/evaluate_task4a.py --losses tcp
-python scripts/evaluate_task4b.py --losses tcp
+python scripts/evaluate_task4a.py --config my_models.json
+python scripts/evaluate_task4b.py --config my_models.json
 ```
 
-Both evaluate small, medium and large by default. Add `--sizes large` (or `--sizes small medium`) to select sizes. The first command evaluates all test rows using FK; the second evaluates the first 100 test rows per arm in headless Webots.
-
-## Large baseline option (section 5)
-
-Add `--include-large-baseline` to also score the supplied existing large joint-loss checkpoint (the controller's default model) as a reference.
-
-Note: the original README later says this argument is still accepted and that the large joint-loss model is included by default, so the option has no effect now.
+The first command evaluates all test rows using FK; the second evaluates the first 100 test rows per arm in headless Webots.
 
 ## Windows launcher example (section 5)
 

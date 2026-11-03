@@ -60,14 +60,14 @@ scripts/       Run from a terminal
 data/          raw/ (audit rows), nn/ (normalised data and splits), evaluation/
 figures/       Dataset analysis plots
 models/        Trained checkpoints: .npz weights, .json config, .csv loss history
-outputs/       Written by your own runs (task4a/, task4b/, ...)
+outputs/       Created when you run the evaluation scripts (task4a/, task4b/); not stored in git
 reports/       Saved results and experiment write-ups
 tests/         python -m unittest discover -s tests
 ```
 
 ## Training and evaluation, in brief
 
-Default live model: `mlp_ned_scara_large_h64x64_cosine`. `train_mlp.py`
+Default live model: `mlp_ned_scara_large_h64x64x64x64_cosine_per-robot_tcp_p1000`. `train_mlp.py`
 options: `--size small|medium|large`, `--hidden`, `--loss joints|tcp`,
 `--activation relu|tanh|per-robot`, `--decay cosine|none`, `--lr`, `--seed`,
 `--splits-dir`, `--model-name`. The full checkpoint-by-checkpoint command
@@ -75,9 +75,10 @@ list (every trial model, not just the main ones) is in
 [reports/README_extra.md](reports/README_extra.md).
 
 `evaluate_task4a.py` (Task 4.A, FK-based) and `evaluate_task4b.py`
-(Task 4.B, first 100 points per arm in headless Webots) both score every
-small/medium/large checkpoint without retraining; see `--help` for
-`--losses`, `--sizes`, `--output`, `--webots`. Saved, verified runs:
+(Task 4.B, first 100 points per arm in headless Webots) both score the
+models listed in `configs/evaluate_task4a.json` (the per-robot TCP-loss
+small/medium/large checkpoints) without retraining; edit that file to compare
+other checkpoints. See `--help` for `--config`, `--output`, `--webots`. Saved, verified runs:
 [reports/coursework_evaluation](reports/coursework_evaluation/README.md).
 
 To change the live model in `worlds/articulated.wbt` / `scara.wbt`: select

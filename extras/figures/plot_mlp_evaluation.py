@@ -204,20 +204,20 @@ def joint_statistics(rows, output, metric):
     save(fig, output, bottom=0.2)
 
 
-def heldout_objective(model_dir, size, variant):
+def heldout_objective(model_dir, size, variant, name=None):
     """Score the saved best-validation checkpoint once on the independent test split."""
     raw_inputs, labels, outputs = [], [], []
     config = None
     for robot in ROBOTS:
         x, y = load_test(ROOT / "data" / "nn" / "splits" / robot / "test.csv", robot)
-        prediction, config = predict_model(model_dir, size, variant, robot, x)
+        prediction, config = predict_model(model_dir, size, variant, robot, x, name=name)
         raw_inputs.append(x)
         labels.append(y)
         outputs.append(prediction)
     x = np.concatenate(raw_inputs)
     y = np.concatenate(labels)
     prediction = np.concatenate(outputs)
-    if variant == "tcp":
+    if config.get("loss") == "tcp":
         return tcp_loss_and_gradient(prediction, x, JOINT_LIMITS,
                                      float(config.get("tcp_limit_weight", 0.01)))[0]
     return float(np.mean((prediction - y) ** 2))
@@ -233,33 +233,49 @@ def smooth_curve(values, window=25):
     return np.lib.stride_tricks.sliding_window_view(padded, window).mean(axis=-1)
 
 
-def training_loss_curves(model_dir, output):
-    """Show smoothed train/validation curves and one held-out test score per checkpoint."""
+def training_loss_curves(model_dir, output, rows=()):
+    """Show smoothed train/validation curves and one held-out test score per evaluated checkpoint.
+
+    Models come from the "model" column of the evaluation summary, so the plot follows
+    whatever configs/evaluate_task4a.json lists; without it the old h64x64 pair is used.
+    """
     split_colors = {"train": "#2878b5", "validation": "#e07a3f", "test": "#4a9b67"}
-    fig, axes = plt.subplots(3, 2, figsize=(12, 10), squeeze=False)
-    objectives = (
-        ("existing_joints", "Joint-label MSE", "train_mse", "val_mse", "MSE (normalised joint units²)"),
-        ("tcp", "TCP objective", "train_loss_m2", "val_loss_m2", "Loss (m², includes limit penalty)"),
-    )
+    models = {}
+    for r in rows:
+        models.setdefault(r["size"], {})[r.get("model") or model_name(r["size"], r["variant"])] = r["variant"]
+    if not models:
+        models = {size: {model_name(size, v): v for v in ("existing_joints", "tcp")} for size in SIZES}
+    columns = max(len(m) for m in models.values())
+    fig, axes = plt.subplots(len(SIZES), columns, figsize=(max(12, 6 * columns), 10), squeeze=False)
     for row, size in enumerate(SIZES):
-        for column, (variant, objective_title, train_key, val_key, ylabel) in enumerate(objectives):
+        for column in range(columns):
             ax = axes[row, column]
-            name = model_name(size, variant)
+            items = list(models.get(size, {}).items())
+            if column >= len(items):
+                ax.axis("off")
+                continue
+            name, variant = items[column]
             history_path = Path(model_dir) / f"{name}_history.csv"
             config_path = Path(model_dir) / f"{name}.json"
             if not history_path.is_file() or not config_path.is_file():
                 ax.text(0.5, 0.5, "Model history not found", transform=ax.transAxes, ha="center")
                 continue
+            config = json.loads(config_path.read_text(encoding="utf-8"))
+            if config.get("loss") == "tcp":
+                objective_title, train_key, val_key, ylabel = (
+                    "TCP objective", "train_loss_m2", "val_loss_m2", "Loss (m², includes limit penalty)")
+            else:
+                objective_title, train_key, val_key, ylabel = (
+                    "Joint-label MSE", "train_mse", "val_mse", "MSE (normalised joint units²)")
             with history_path.open(newline="", encoding="utf-8") as source:
                 history = list(csv.DictReader(source))
-            epochs = [int(row["epoch"]) for row in history]
-            train = [max(float(row[train_key]), 1e-12) for row in history]
-            validation = [max(float(row[val_key]), 1e-12) for row in history]
+            epochs = [int(r["epoch"]) for r in history]
+            train = [max(float(r[train_key]), 1e-12) for r in history]
+            validation = [max(float(r[val_key]), 1e-12) for r in history]
             ax.plot(epochs, smooth_curve(train), color=split_colors["train"], linewidth=2.0)
             ax.plot(epochs, smooth_curve(validation), color=split_colors["validation"], linewidth=2.0)
-            config = json.loads(config_path.read_text(encoding="utf-8"))
             best_epoch = int(config["best_epoch"])
-            test_value = max(heldout_objective(model_dir, size, variant), 1e-12)
+            test_value = max(heldout_objective(model_dir, size, variant, name), 1e-12)
             ax.scatter([best_epoch], [test_value], marker="D", s=62,
                        facecolor=split_colors["test"], edgecolor="#202020", linewidth=0.9,
                        zorder=5, clip_on=False)
@@ -296,7 +312,7 @@ def plot_task4a(summary, joints, predictions, output, model_dir=ROOT / "models")
     endpoint_rmse(summary, output / "tcp_rmse.png", "4a")
     joint_statistics(joints, output / "joint_mean_errors.png", "mean_error")
     joint_statistics(joints, output / "joint_error_std.png", "std_error")
-    training_loss_curves(model_dir, output / "training_loss.png")
+    training_loss_curves(model_dir, output / "training_loss.png", summary)
     remove_old_extra_graphs(output, ("tcp_accuracy_curves.png",))
     (output / "graphs.md").write_text("# Task 4.A graphs\n\n"
         "Blue = joint-loss model; orange = TCP-loss model. Missing checkpoints are not zero errors.\n\n"
@@ -312,7 +328,7 @@ def plot_task4b(summary, predictions, output, model_dir=ROOT / "models"):
     output = Path(output)
     endpoint_summary(summary, output / "comparison.png", "4b")
     endpoint_rmse(summary, output / "tcp_rmse.png", "4b")
-    training_loss_curves(model_dir, output / "training_loss.png")
+    training_loss_curves(model_dir, output / "training_loss.png", summary)
     remove_old_extra_graphs(output, ("tcp_accuracy_curves.png", "fk_vs_webots.png"))
     (output / "graphs.md").write_text("# Task 4.B graphs\n\n"
         "Blue = joint-loss model; orange = TCP-loss model. All measured points, including any motor timeouts, count. Check summary.csv for settling status.\n\n"

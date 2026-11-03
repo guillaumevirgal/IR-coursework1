@@ -3,17 +3,17 @@
     {
       "size": "small",
       "variant": "per_robot",
-      "name": "mlp_ned_scara_small_h64x64x64x64_cosine_per-robot"
+      "name": "mlp_ned_scara_small_h64x64x64x64_cosine_per-robot_tcp_p1000"
     },
     {
       "size": "medium",
       "variant": "per_robot",
-      "name": "mlp_ned_scara_medium_h64x64x64x64_cosine_per-robot"
+      "name": "mlp_ned_scara_medium_h64x64x64x64_cosine_per-robot_tcp_p1000"
     },
     {
       "size": "large",
       "variant": "per_robot",
-      "name": "mlp_ned_scara_large_h64x64x64x64_cosine_per-robot"
+      "name": "mlp_ned_scara_large_h64x64x64x64_cosine_per-robot_tcp_p1000"
     }
   ]
 }

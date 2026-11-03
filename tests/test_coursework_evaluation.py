@@ -63,7 +63,7 @@ class CourseworkEvaluationTests(unittest.TestCase):
     def test_webots_error_uses_measurement_and_keeps_timeouts(self):
         rows, cases, raw = self.measured_rows()
         validate_measurements(rows, cases, raw, "ned")
-        result = summarize("small", "tcp", "ned", rows)
+        result = summarize("small", "tcp", "model", "ned", rows)
         self.assertAlmostEqual(result["mean_tcp_mm"], 10)
         self.assertAlmostEqual(result["fk_first100_mean_mm"], 0)
         self.assertEqual(result["samples"], 100)
