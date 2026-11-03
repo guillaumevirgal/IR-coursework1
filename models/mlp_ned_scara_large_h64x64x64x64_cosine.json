@@ -1,0 +1,46 @@
+{
+  "robots": [
+    "ned",
+    "scara"
+  ],
+  "size": "large",
+  "hidden": [
+    64,
+    64,
+    64,
+    64
+  ],
+  "lr": 0.001,
+  "lr_min": 1e-05,
+  "decay": "cosine",
+  "batch": 32,
+  "epochs": 3000,
+  "patience": 300,
+  "seed": 2026,
+  "loss": "joints",
+  "tcp_limit_weight": 0.01,
+  "splits_dir": "data/nn/splits",
+  "activation": "relu",
+  "model_name": null,
+  "best_epoch": 1123,
+  "best_val_loss": 0.00019713290126321118,
+  "training_tcp_target": "desired policy TCP when present, otherwise requested TCP",
+  "validation_tcp_target": "requested TCP",
+  "validation_fk_metrics": {
+    "ned": {
+      "mean_tcp_error_mm": 2.9085723697095385,
+      "median_tcp_error_mm": 2.469197677328669,
+      "p95_tcp_error_mm": 6.3297282469344385,
+      "max_tcp_error_mm": 12.981381691440015,
+      "rmse_tcp_error_mm": 3.420889022566912
+    },
+    "scara": {
+      "mean_tcp_error_mm": 1.4193738087785674,
+      "median_tcp_error_mm": 1.1081020589232335,
+      "p95_tcp_error_mm": 3.551367573194023,
+      "max_tcp_error_mm": 9.612320154140924,
+      "rmse_tcp_error_mm": 1.810193373101212
+    }
+  },
+  "best_val_mse": 0.00019713290126321118
+}
