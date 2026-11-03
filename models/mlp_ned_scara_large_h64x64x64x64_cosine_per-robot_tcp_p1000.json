@@ -1,0 +1,45 @@
+{
+  "robots": [
+    "ned",
+    "scara"
+  ],
+  "size": "large",
+  "hidden": [
+    64,
+    64,
+    64,
+    64
+  ],
+  "lr": 0.001,
+  "lr_min": 1e-05,
+  "decay": "cosine",
+  "batch": 32,
+  "epochs": 3000,
+  "patience": 1000,
+  "seed": 2026,
+  "loss": "tcp",
+  "tcp_limit_weight": 0.01,
+  "splits_dir": "data/nn/splits",
+  "activation": "per-robot",
+  "model_name": "mlp_ned_scara_large_h64x64x64x64_cosine_per-robot_tcp_p1000",
+  "best_epoch": 2988,
+  "best_val_loss": 4.547622301919262e-08,
+  "training_tcp_target": "desired policy TCP when present, otherwise requested TCP",
+  "validation_tcp_target": "requested TCP",
+  "validation_fk_metrics": {
+    "ned": {
+      "mean_tcp_error_mm": 0.1835930272245464,
+      "median_tcp_error_mm": 0.16281930467853087,
+      "p95_tcp_error_mm": 0.3562108332742746,
+      "max_tcp_error_mm": 2.835930560553681,
+      "rmse_tcp_error_mm": 0.22382555323883035
+    },
+    "scara": {
+      "mean_tcp_error_mm": 0.17335394686257036,
+      "median_tcp_error_mm": 0.15811416432731704,
+      "p95_tcp_error_mm": 0.3495372951882194,
+      "max_tcp_error_mm": 0.9137590014532764,
+      "rmse_tcp_error_mm": 0.19774683564610127
+    }
+  }
+}
