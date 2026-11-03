@@ -1,4 +1,4 @@
-#VRML_SIM R2023b utf8
+#VRML_SIM R2025a utf8
 
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023b/projects/objects/backgrounds/protos/TexturedBackground.proto"
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023b/projects/objects/backgrounds/protos/TexturedBackgroundLight.proto"
@@ -8,8 +8,8 @@ EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023b/project
 WorldInfo {
 }
 Viewpoint {
-  orientation -0.03219161520108626 -0.021763065329657126 0.9992447492472514 4.103453330185252
-  position 1.958304037130277 3.027942221754131 0.47471059290904066
+  orientation -0.11724970430810619 -0.051495551787519536 0.991766461918208 3.8977180134798983
+  position 2.457668302607017 2.5236301648984965 1.0744047969478256
 }
 TexturedBackground {
 }
@@ -18,7 +18,6 @@ TexturedBackgroundLight {
 Floor {
 }
 DEF TARGET Pose {
-  # Reachable SCARA target for the default start pose (q1=0, q2=0.3, lift=-0.05).
   translation 0.61461 0.07543 0.132
   children [
     Shape {
