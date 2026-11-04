@@ -86,6 +86,8 @@ save and reset.
 
 Diagnostics (per-target Webots plots): `python extras/diagnostics/generate_mlp_diagnostics.py`.
 
+Tests: `python -m unittest discover -s extras/tests`.
+
 ## Further reading
 
 - Architecture / activation sweep (depth, width, dataset size, relu vs tanh
