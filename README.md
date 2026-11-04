@@ -13,6 +13,22 @@ evaluation and live control immediately without retraining anything.
 - Matplotlib, only for figures — evaluation still writes all numbers without it.
 
 
+## Dataset
+
+Generated in Webots (Task 2): 16,000 accepted samples per robot (seed 42), each
+a random joint configuration with the end-effector position read from Webots.
+Settings are in `configs/dataset_generation.json`. Everything is under `data/`:
+
+| File | Contents |
+|---|---|
+| `data/raw/{ned,scara}_master_audit.csv` | Every generation attempt (18,244 Ned, 19,848 SCARA), with `accepted` / `rejection_reason`, joint values, expected (`ex,ey,ez`) and Webots-measured (`ax,ay,az`) TCP position, and `error`. |
+| `data/nn/{ned,scara}_master.csv` | The 16,000 accepted samples per robot in network format: `is_scara, is_ned, x, y, z, q1, q2, q3` (position in metres, joints normalised to [-1, 1]). |
+| `data/nn/splits/{ned,scara}/` | Train / validation / test splits per robot: `small` 800 / 200, `medium` 4,000 / 1,000, `large` 12,000 / 3,000, plus a fixed 1,000-sample `test.csv`. |
+
+Inputs are `[is_scara, is_ned, x, y, z]`; targets are `[q1, q2, q3]`. Joint
+limits and normalisation are in `scripts/robot_config.py`. Training uses the
+splits directly; the Ned and SCARA rows are combined into one shared model.
+
 ## Fastest way to see results
 
 ```bash
