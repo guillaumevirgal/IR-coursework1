@@ -27,7 +27,7 @@ OUT = Path(__file__).resolve().parent
 ROOT = OUT.parents[2]
 sys.path.insert(0, str(ROOT))
 
-from scripts.train_mlp import INPUTS, MLP, MODELS, OUTPUTS, find_model, load_split, position_errors
+from scripts.train_mlp import INPUTS, MLP, OUTPUTS, find_model, load_split, position_errors
 
 
 # (model file stem, label) in the order the experiments were run.
