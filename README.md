@@ -62,7 +62,6 @@ figures/       Dataset analysis plots
 models/        Trained checkpoints: .npz weights, .json config, .csv loss history
 outputs/       Created when you run the evaluation scripts (task4a/, task4b/); not stored in git
 reports/       Saved results and experiment write-ups
-tests/         python -m unittest discover -s tests
 ```
 
 ## Training and evaluation, in brief
@@ -102,4 +101,3 @@ Diagnostics (per-target Webots plots): `python extras/diagnostics/generate_mlp_d
 - All paths are relative to the repository root.
 - Datasets are in `data/`, trained models in `models/`.
 - Seeds: dataset generation `42`, MLP training `2026` (`--seed`), scikit-learn baseline `42`, unreachable-target experiment `2026`.
-- Tests: `python -m unittest discover -s tests`.
